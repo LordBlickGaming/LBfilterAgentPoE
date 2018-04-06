@@ -1,0 +1,326 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+# -*- coding: utf-8 -*-
+# -*- tabstop: 4 -*-
+
+from clIniFile import IniSections, _p, xlist
+from uiMySinker import wg
+from os import path as ph
+from uiMySinker import lsFiles
+cfgFiles = lambda key: "%sFN" % key if key in lsFiles else None
+
+class mySinker:
+	def __init__(mn):
+		mn.uiInit()
+		mn.appStart()
+
+	uiFn = lambda mn, fileName: fileName.replace(ph.expanduser('~'), '~')
+	otFn = lambda mn, fileName: fileName.replace('NeverSink', 'MySink')
+
+	def uiInit(mn):
+		from uiMySinker import mySinker_UI
+		ui = mn.ui = mySinker_UI()
+		ui.buttonExit.connect("clicked", lambda w: mn.appExit())
+		ui.mainWindow.connect("destroy", lambda w: mn.appExit())
+		map(lambda select: getattr(ui, "buttonFileName"+select).connect(
+			"clicked", lambda xargs: mn.appSetFileName(select)), lsFiles)
+		ui.buttonConvert.connect("clicked", lambda w: mn.appConvert())
+		ui.buttonDiff.connect("clicked", lambda w: mn.appDiff())
+		mn._p = ui.logView.insert_end
+
+	def appUpdateFilename(mn, select, bUpEmptyTxt=True):
+		trans = cfgFiles(select)
+		if not(trans):
+			return
+		ui = mn.ui
+		lastFN = mn.cfg['Main'][trans]
+		lblDspl = getattr(ui, 'dsplFilename' + select)
+		if lastFN:
+			lblDspl.set_text(lastFN.replace(ph.expanduser('~'), '~'))
+		else:
+			lblDspl.set_text(ui.txtFN)
+
+	def appCheckFilenames(mn):
+		from os import access, W_OK
+		ui = mn.ui
+		lsCheck = []
+		for select in lsFiles:
+			trans = cfgFiles(select)
+			cfgPath = mn.cfg['Main'][trans]
+			if not(cfgPath):
+				lsCheck.append(False)
+				continue
+			if select=='Out':
+				path = ph.dirname(cfgPath)
+				t = access(path, W_OK)
+				lsCheck.append(t)
+			else:
+				lsCheck.append(ph.isfile(cfgPath))
+		#ui.buttonConvert.set_sensitive(not(False in lsCheck))
+		ui.buttonConvert.set_sensitive(all(lsCheck))
+		return True
+
+	def appSetFileName(mn, select):
+		trans = cfgFiles(select)
+		if not(trans):
+			return
+		inputFN = mn.cfg['Main'][trans]
+		lastDir = ph.dirname(inputFN) if inputFN else mn.ui.runpath
+		newFilename = wg.dialogChooseFile(parent=mn.ui.mainWindow,
+			startDir=lastDir, filters=(mn.ui.poeFilter,),
+			title=("Select file to %s" % ('read', 'write')[select=='Out']), bShowHidden=True,
+			act=('file_open', 'file_save')[select=='Out'])
+		if newFilename:
+			mn.cfg['Main'][trans] = newFilename
+		mn.appUpdateFilename(select)
+
+	def appConvert(mn):
+		fn = mn.cfg['Main']['InFN']
+		from clFilterPoE import nvrsnkSections, Rule
+		dbg = False
+		inFS = nvrsnkSections(mn._p, debug=dbg)
+		inFS.load(fn)
+		if not(inFS.fnLoad):
+			return
+
+
+		#Oni-Goroshi Farm
+		sect = inFS.getSectionById(100, "OVERRIDE AREA 1 - Override ALL rules here")
+		if sect:
+			txtRule = '\nShow # Goldrim chance base on Twilight Strand\n'
+			txtRule += 'Class "Helmets"\nBaseType "Leather Cap"\n'
+			txtRule += 'Rarity Normal\n'
+			#txtRule += 'Rarity <= Magic\n'
+			txtRule += 'ItemLevel 3\n'
+			#txtRule += 'DropLevel 1\n'
+			txtRule += 'SetFontSize 40\n'
+			txtRule += 'SetTextColor 255 255 255\n'
+			txtRule += 'SetBorderColor 0 200 0 190\n'
+			#txtRule += 'SetBackgroundColor 20 70 30 128\n'
+			txtRule += 'SetBackgroundColor  80 170 100 128\n'
+			#txtRule += 'PlayAlertSound 6 300\n'
+			txtRule += '\n'
+			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
+			#print '\n'.join(linesRule)
+			newRule = Rule(mn._p, debug=dbg)
+			acquired = newRule.load(linesRule)
+			sect[0][0].insert(0, newRule)
+
+		#lower Font Size
+		sect = inFS.getSectionById(700, "Currency - PART 1 - Common currency")
+		if sect:
+			rules = sect.srch_rule_basetype("Silver Coin", True)
+			for rule in rules:
+				rule.tuneFontSize(45, 38, True)
+				rule.setColor("SetBackgroundColor", 190, 178, 135, 255)
+			#  "Orb of Chance" "Orb of Alteration" "Chromatic Orb" "Jeweller's Orb" "Glassblower's Bauble"
+			rules = sect.srch_rule_basetype("Orb of Chance", True)
+			for rule in rules:
+				rule.tuneFontSize(45, 38, True)
+			# "Orb of Transmutation" "Blacksmith's Whetstone" "Alchemy Shard"
+			rules = sect.srch_rule_basetype("Orb of Transmutation", True)
+			for rule in rules:
+				rule.tuneFontSize(42, 36, True)
+			# "Portal Scroll"
+			rules = sect.srch_rule_basetype("Portal Scroll", True)
+			for rule in rules:
+				rule.tuneFontSize(40, 32, True)
+			# "Armourer's Scrap" "Orb of Augmentation" "Transmutation Shard" "Alteration Shard"
+			rules = sect.srch_rule_basetype("Armourer's Scrap", True)
+			for rule in rules:
+				rule.tuneFontSize(40, 32, True)
+			#  "Scroll of Wisdom"
+			rules = sect.srch_rule_basetype("Scroll of Wisdom", True)
+			for rule in rules:
+				rule.tuneFontSize(40, 32, True)
+		#
+		
+		sect = inFS.getSectionById(1300, "UTILITY FLASKS (Levelling Rules)")
+		if sect:
+			sect.tuneFontSize(45, 36)
+			rules = sect.srch_rule_basetype("Quicksilver Flask", True)
+			for rule in rules:
+				rule.Actions.deactivate('PlayAlertSound')
+		ssect = inFS.getSubsecttionById(1500, 1508, "Map fragments")
+		if ssect:
+			for div in ssect:
+				for rule in div:
+					baseRow = rule.Conditions['BaseType']
+					classRow = rule.Conditions['Class']
+					if not(baseRow) and(classRow) and("Map Fragments" in classRow[1][0]):
+						rule.tuneFontSize(45, 42, True)
+		ssect = inFS.getSubsecttionById(1600, 1601, "Regular Rare Currency")
+		if ssect:
+			ssect.tuneFontSize(45, 40)
+		ssect = inFS.getSubsecttionById(1600, 1603, "Bestiary Currency")
+		if ssect:
+			ssect.tuneFontSize(42, 38)
+			rules = ssect.srch_rule_basetype("Thaumaturgical Net", True)
+			for rule in rules:
+				rule.tuneFontSize(45, 42, True)
+		ssect = inFS.getSubsecttionById(1600, 1605, "Essence Tier List")
+		if ssect:
+			ssect.tuneFontSize(38, 36)
+			ssect.tuneFontSize(40, 38)
+			ssect.tuneFontSize(42, 40)
+			rules = ssect.srch_rule_basetype("Screaming Essence of", True)
+			for rule in rules:
+				rule.tuneFontSize(45, 42, True)
+		ssect = inFS.getSubsecttionById(1600, 1606, "Special items")
+		if ssect:
+			matchCnt = 0
+			txtMatches = ''
+			for div in ssect:
+				for rule in div:
+					baseRow = rule.Conditions['BaseType']
+					if not(baseRow):
+						continue
+					_, args, _, _ = baseRow
+					sargs = map(lambda x: x.strip('"').split("Splinter of ")[-1], args)
+					if sargs == "Xoph Esh Tul Uul-Netol".split():
+						rule.tuneFontSize(45, 42, True)
+						matchCnt += 1
+						txtMatches += ' Splinters'
+					elif "Perandus Coin" in args[0]:
+						rule.tuneFontSize(42, 38, True)
+						matchCnt += 1
+						txtMatches += ' Perandus'
+			if matchCnt<2:
+				mn._p("too few matchCnt\nmatches:", 'tgErr')
+				mn._p("%s\n" % txtMatches, 'tgPhrase')
+		ssect = inFS.getSubsecttionById(1700, 1701, "Exceptions to prevent ident. mistakes")
+		if ssect:
+			ssect.tuneFontSize(45, 38)
+		ssect = inFS.getSubsecttionById(1700, 1704, "T3 - Decent cards")
+		if ssect:
+			ssect.tuneFontSize(45, 42)
+		ssect = inFS.getSubsecttionById(1700, 1706, "T4 - ...showing the remaining cards")
+		if ssect:
+			ssect.tuneFontSize(45, 40)
+		ssect = inFS.getSubsecttionById(2000, 2005, "Multi-Unique bases.")
+		if ssect:
+			ssect.tuneFontSize(45, 42)
+		#show highest tiers of mana/life flasks
+		ssect = inFS.getSubsecttionById(2300, 2301, "Hide outdated flasks")
+		if ssect:
+			rule = ssect[0][2]
+			if rule.Conditions.has_lead('BaseType') and(rule.Conditions.get_args('BaseType')[-2:]==tuple("Divine Eternal".split())):
+				rule.Conditions.set_args('BaseType', rule.Conditions.get_args('BaseType')[:-2])
+			else:
+				print("Divine/Eternal flasks could be not showed, check rules change in 2300/2301 Otdated flask section")
+		sect = inFS.getSectionById(2400, "Leveling - Merged Rules")
+		if sect:
+			sect.tuneFontSize(42, 34)
+		ssect = inFS.getSubsecttionById(2600, 2601, "Leveling rares - specific items")
+		if ssect:
+			ssect.tuneFontSize(42, 34)
+		#lower Font Size of unsorted by level 4L
+		ssect = inFS.getSubsecttionById(2700, 2701, "Linked gear - 4links")
+		if ssect:
+			ssect.tuneFontSize(42, 34)
+		ssect = inFS.getSubsecttionById(2700, 2712, "20% quality items for those strange people who want them")
+		if ssect:
+			ssect.activate()
+		#enable lvl, small
+		ssect = inFS.getSubsecttionById(2800, 2805, "Magic items - general highlight")
+		if ssect:
+			ssect.activate()
+		# show, tune font, insert rule from text
+		sect = inFS.getSectionById(2900, "HIDE LAYER 5 - Remaining Items")
+		if sect:
+			rule = sect[0][0][0]
+			rule.Appear = 'Show'
+			rule.tuneFontSize(26, 20)
+			txtRule = '\nShow # essence alchemy base for chaos recipe\nClass "Rings" "Amulet" "Belts" "Gloves" "Boots" "Helmets"\n'
+			txtRule += 'Rarity Normal\nItemLevel >= 60\nSetFontSize 25\nSetTextColor 255 255 255\n'
+			txtRule += 'SetBorderColor 0 150 0 190\nSetBackgroundColor 20 70 30 128\n\n'
+			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
+			newRule = Rule(mn._p, debug=dbg)
+			acquired = newRule.load(linesRule)
+			sect[0][0].insert(1, newRule)
+		#Disable >=4L dropsound
+		for sect in inFS:
+			for ssect in sect:
+				for div in ssect:
+					for rule in div:
+						if rule.Conditions.has_lead('LinkedSockets_Hi') and(rule.Conditions.get_args('LinkedSockets_Hi')[-1]=='4'):
+							rule.Actions.deactivate('PlayAlertSound')
+
+		inFS.store(mn.cfg['Main']['OutFN'])
+
+	def run(mn, cmd, echo=True, out=''):
+		from subprocess import Popen
+		from shlex import split as shsp
+		from time import sleep
+		if echo:
+			mn._p("> %s\n" % cmd)
+			#print(tuple(shsp(cmd)))
+		if out:
+			fd_out = open(out, "w")
+			fd_out.flush()
+			process = Popen(shsp(cmd), stdout=fd_out)
+		else:
+			process = Popen(shsp(cmd))
+		while process.poll() == None: # poll()=None means still running
+			sleep(.4)
+		if out:
+			fd_out.close()
+		return
+
+	def appDiff(mn):
+		fn1 = mn.cfg['Main']['InFN']
+		bn1 = ph.basename(fn1)
+		#print(bn1)
+		fn2 = mn.cfg['Main']['OutFN']
+		bn2 = ph.basename(fn2)
+		#print(bn2)
+		#print(set(bn1).intersection(bn2))
+		dn = ph.dirname(fn1)
+		#print(dn)
+		cmd = "diff -u \"%s\" \"%s\"" % (fn1, fn2)
+		mn.run(cmd, out=("%s/Sink.diff" % dn))
+
+	def appCfgLoad(mn, restoreGeo=True):
+		ui = mn.ui
+		mn.cfg = IniSections()
+		cfg_fn = mn.ui.runpath+'/'+ ph.basename(__file__)+'.ini'
+		if ph.isfile(cfg_fn):
+			mn.cfg.load(cfg_fn)
+			_p("Config file: '%s'\n" % (cfg_fn))
+		if not(mn.cfg.filename):
+			mn.cfg.filename = cfg_fn
+		mn.lastcfg = mn.cfg['Main'].copy(), mn.cfg['UI'].copy()
+		if restoreGeo:
+			from dlgEngine import DialogEngine
+			ui.cfg = mn.cfg['UI']
+			ui.dlgEngine = DialogEngine(ui)
+			ui.restoreGeometry()
+
+	def appCfgStore(mn):
+		mn.ui.storeGeometry()
+		if mn.lastcfg!=(mn.cfg['Main'], mn.cfg['UI']):
+			mn.cfg.section_place('Main', 0)
+			mn.cfg.store()
+			#_p("Written config:%s…\n" % mn.cfg.filename)
+
+	def appStart(mn):
+		mn.appCfgLoad()
+		for select in lsFiles:
+			mn.appUpdateFilename(select, False)
+		# Start time tick
+		from gobject import timeout_add as addTick
+		mn.chkThr = addTick(1000, mn.appCheckFilenames)
+		mn.ui.uiEnter()
+
+	def appStop(mn):
+		mn.appCfgStore()
+		# Stop time tick
+		from gobject import source_remove as unWatch
+		unWatch(mn.chkThr)
+
+	def appExit(mn):
+		mn.appStop()
+		mn.ui.uiExit()
+
+if __name__ == "__main__":
+	mySinker()
