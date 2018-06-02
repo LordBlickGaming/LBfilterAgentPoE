@@ -116,7 +116,7 @@ class mySinker_UI:
 		lb = lv.get_buffer()
 		lv.tgFileName = lb.create_tag('filename', weight = pango.WEIGHT_BOLD, foreground = 'yellow')
 		lv.tgPhrase = lb.create_tag('phrase', weight = pango.WEIGHT_BOLD, foreground = 'orange')
-		lv.tgWarn = lb.create_tag('warning', weight = pango.WEIGHT_BOLD, foreground = '#FA0')
+		lv.tgWarn = lb.create_tag('warning', weight = pango.WEIGHT_BOLD, foreground = '#FD0')
 		lv.tgErr = lb.create_tag('error', weight = pango.WEIGHT_BOLD, foreground = 'red')
 		lv.tgEnum = lb.create_tag('line_number', weight = pango.WEIGHT_BOLD, foreground = '#0F0')
 

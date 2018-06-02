@@ -24,6 +24,8 @@ reSubSect = re.compile(r"^\s*#\s*\[(?P<ssectID>\d+)\]\s*(?P<ssectTxt>[\w\s\-\+,\
 
 reDiv = re.compile(r"^\s*#\s*(?P<divTxt>[\w\s\-\+,\(\)\!\:%\.\/\"]+)$", re.U)
 
+Data_pass = "None"
+
 _range = lambda _min, _max: tuple(range(_min, _max+1))
 in_range = lambda _val, _min, _max: _val in _range(_min, _max)
 _byte = _range(0, 255)
@@ -32,28 +34,33 @@ _nan_byte = (None,)+_byte # not always needed
 
 cond_bool             = 1
 cond_list             = 2
-cond_match_re         = 3
-cond_compare_or_space = 4
+cond_list_multi       = 3
+cond_match_re         = 4
+cond_compare_or_space = 5
 dcRarity = dict(map(reversed, (enumerate("Normal Magic Rare Unique".split()))))
 
 conditions = (
-	("ShaperItem",    cond_bool),
-	("ElderItem",     cond_bool),
-	("ShapedMap",     cond_bool),
-	("Corrupted",     cond_bool),
-	("Identified",    cond_bool),
-	("LinkedSockets", cond_compare_or_space, _range(1, 6)),
-	("Sockets",       cond_compare_or_space, _range(1, 6)),
-	("SocketGroup",   cond_match_re,         r"^[RGBW]{1,6}$"),
-	("Width",         cond_compare_or_space, (1, 2)),
-	("Height",        cond_compare_or_space, _range(1, 4)),
-	("Quality",       cond_compare_or_space, _range(1, 30)),
-	("ItemLevel",     cond_compare_or_space, _range(1, 100)),
-	("DropLevel",     cond_compare_or_space, _range(1, 100)),
-	("Class",         cond_list),
-	("ElderMap",    cond_bool),
-	("BaseType",      cond_list),
+	("ShaperItem",     cond_bool),
+	("ElderItem",      cond_bool),
+	("ShapedMap",      cond_bool),
+	("Corrupted",      cond_bool),
+	("Identified",     cond_bool),
+	("LinkedSockets",  cond_compare_or_space, _range(1, 6)),
+	("Sockets",        cond_compare_or_space, _range(1, 6)),
+	("SocketGroup",    cond_match_re,         r"^[RGBW]{1,6}$"),
+	("StackSize",      cond_compare_or_space, (1, 1000)),
+	("Width",          cond_compare_or_space, (1, 2)),
+	("Height",         cond_compare_or_space, _range(1, 4)),
+	("Quality",        cond_compare_or_space, _range(1, 30)),
+	("ItemLevel",      cond_compare_or_space, _range(1, 100)),
+	("DropLevel",      cond_compare_or_space, _range(1, 100)),
+	("Class",          cond_list),
+	("GemLevel",       cond_compare_or_space, (1, 30)),
+	("ElderMap",       cond_bool),
+	("BaseType",       cond_list),
+	("HasMod",         cond_list),
 	("Rarity",        cond_compare_or_space, dcRarity),
+	("HasExplicitMod", cond_list_multi),
 	)
 cond_raw = tuple(map(lambda n: n[0], conditions))
 which_condition = lambda txt: cond_raw.index(txt)+1 if txt in cond_raw else 0
@@ -79,22 +86,26 @@ reAciton = re.compile(
 	+r')|(?:'.join(actn_raw)\
 	+r"))(?P<txtArgs>[^#]*)(?P<comment>#.*)?$", re.U)
 
-class ruleCommands(xlist):
+class rulePrims(xlist):
 	'''
 	Extended constant list of rows:
 	  (command(str), (activity(bool), args(list), comment_spc, comment))
 	 Empty command:
 	  (command, None)
 	'''
-	def __init__(it, logger, commands, name):
+	def __init__(it, logger, commands, name, debug=True):
 		xlist.__init__(it)
 		it._p = logger
+		it._d = logger if debug else _d
 		it.name = name
 		it.bWarning = True
 		for command in commands:
 			if name == "Condition" and(it.getCondType(command)==cond_compare_or_space):
 				it.append((command+'_Hi', None))
 				it.append((command+'_Lo', None))
+			elif name == "Condition" and(it.getCondType(command)==cond_list_multi):
+				lm = xlist()
+				it.append((command+'_M', lm))
 			else:
 				it.append((command, None))
 		it.keys =  tuple(map(lambda (key, value): key, it))
@@ -103,6 +114,8 @@ class ruleCommands(xlist):
 	get_place = lambda it, key: it.keys.index(key)
 
 	def __getitem__(it, key):
+		if type(key) is int:
+			return xlist.__getitem__(it, key)[1] # [0] is key…
 		if it.has_key(key):
 			return xlist.__getitem__(it, it.get_place(key))[1] # [0] is key…
 		else:
@@ -120,12 +133,24 @@ class ruleCommands(xlist):
 			return
 		elif it.has_key(key):
 			idx = it.get_place(key)
-			if it[idx] is not None and(it.bWarning):
-				it._p("      Warning! Overwriting %s „%s”:\n" % (it.name, key), 'tgWarn')
-				it._p("       (%s)\n" % (', '.join(map((lambda x: str(x), it[idx])))), 'tgPhrase')
-				it._p("     with\n", 'tgWarn')
-				it._p("       (%s)\n" % (', '.join(map((lambda x: str(x), value)))), 'tgPhrase')
+			if it[idx] and(it.bWarning):
+				print(it[idx], str(it.bWarning))
+				it._d('\n')
+				it._p("     Warning! Ugly overwriting %s „%s” during Data Work Status: >%s<:\n" % (it.name, key, Data_pass), 'tgWarn')
+				it._p("        (%s)\n" % (', '.join(map(lambda x: str(x), it[idx]))), 'tgPhrase')
+				it._p("      with\n", 'tgWarn')
+				it._p("        (%s)\n" % (', '.join(map(lambda x: str(x), value))), 'tgPhrase')
 			it[idx] = key, value # call  numeric rewrite
+			return
+		elif it.has_key(("%s_M" % key)):
+			key_ = "%s_M" % key
+			idx = it.get_place(key_)
+			_lm = it[idx]
+			#Ugly workaround - usually no need to edit conditions
+			_lm.append(value)
+			#print("%s[%d] = %s, replaced by „%s”" % (
+				#key_, idx, str(_lm), repr(value)))
+			it[idx] = key, _lm # call  numeric rewrite
 			return
 		elif it.has_key(("%s_Hi" % key)) and(it.has_key(("%s_Lo" % key))):
 			_iterable = it.getCondContainer(key)
@@ -218,31 +243,48 @@ class ruleCommands(xlist):
 	set_args = lambda it, command, arg_tuple: it.set_lead(command, 'args', arg_tuple) #need tuple check…
 
 	def activate(it, key):
+		it.bWarning = False
 		it.set_lead(key, 'activity', True)
+		it.bWarning = True
 
 	def deactivate(it, key):
+		it.bWarning = False
 		it.set_lead(key, 'activity', False)
+		it.bWarning = True
+
+	def _st_ln(it, command, activity, args, comment_spc, comment):
+		txt_st = ''
+		txt_st += "%s\t%s " % (('#', '')[activity], command)
+		txt_st += "%s" % ' '.join(map(lambda x: str(x), args))
+		fill = len(txt_st)
+		if comment_spc and(comment):
+			spc_left = comment_spc-fill
+			if spc_left>0:
+				txt_st += ' '*spc_left
+			txt_st += "#%s" % comment
+		txt_st += '\n'
+		return txt_st
 
 	def _st(it, active=True):
 		txt_st = ''
 		for command in it.keys:
 			if not(it[command]):
 				continue
-			ln_st = ''
-			activity, args, comment_spc, comment = it[command]
-			if not(active):
-				activity = False
-			if command[-3:] in "_Hi _Lo".split():
-				command = command[:-3]
-			ln_st += "%s\t%s " % (('#', '')[activity], command)
-			ln_st += "%s" % ' '.join(map(lambda x: str(x), args))
-			fill = len(ln_st)
-			if comment_spc and(comment):
-				spc_left = comment_spc-fill
-				if spc_left>0:
-					ln_st += ' '*spc_left
-				ln_st += "#%s" % comment
-			txt_st += ln_st+'\n'
+			if command[-2:]=='_M':
+				for activity, args, comment_spc, comment in it[command]:
+					if not(active):
+						activity = False
+					txt_st += it._st_ln(command[:-2], activity, args, comment_spc, comment)
+			elif command[-3:] in "_Hi _Lo".split():
+				activity, args, comment_spc, comment = it[command]
+				if not(active):
+					activity = False
+				txt_st += it._st_ln(command[:-3], activity, args, comment_spc, comment)
+			else:
+				activity, args, comment_spc, comment = it[command]
+				if not(active):
+					activity = False
+				txt_st += it._st_ln(command, activity, args, comment_spc, comment)
 		return txt_st
 
 	def argtuple(it, txt):
@@ -254,38 +296,38 @@ class ruleCommands(xlist):
 		return tuple(argspt)
 
 
-class ruleConditions(ruleCommands):
+class ruleConditions(rulePrims):
 
 	def _ld(it, condition, bActive, txtArgs, comment_spc, comment):
 		args = it.argtuple(txtArgs)
 		#TODO: Validate args
 		it[condition] =  bActive, args, comment_spc, comment
 
-	def cond_compare_or_space(it, elementary, *args):
-		cArg = len(args)
-		if cArg==3:
-			if not(reCompares.match(arg[1])):
-				return False
-			txt = arg[2]
-		elif cArg==2:
-			txt = arg[1]
-		else:
-			it._p("Incorrect number of operators: ", 'tgErr')
-			it._p("%d" % (cArg), 'tgEnum')
-			it._p(" in ", 'tgErr')
-			it._p("(%s)" % (', '.join(args)), 'tgPhrase')
-			it._p(" when ", 'tgErr')
-			it._p("2", 'tgEnum')
-			it._p("-", 'tgErr')
-			it._p("3", 'tgEnum')
-			it._p(" required.\n", 'tgErr')
-			return False
-		return hasattr(elementary, "__iter__")\
-			and(txt in elementary\
-				or(txt.isdigit() and(int(txt) in elementary)))
+	#def cond_compare_or_space(it, elementary, *args):
+		#cArg = len(args)
+		#if cArg==3:
+			#if not(reCompares.match(arg[1])):
+				#return False
+			#txt = arg[2]
+		#elif cArg==2:
+			#txt = arg[1]
+		#else:
+			#it._p("Incorrect number of operators: ", 'tgErr')
+			#it._p("%d" % (cArg), 'tgEnum')
+			#it._p(" in ", 'tgErr')
+			#it._p("(%s)" % (', '.join(args)), 'tgPhrase')
+			#it._p(" when ", 'tgErr')
+			#it._p("2", 'tgEnum')
+			#it._p("-", 'tgErr')
+			#it._p("3", 'tgEnum')
+			#it._p(" required.\n", 'tgErr')
+			#return False
+		#return hasattr(elementary, "__iter__")\
+			#and(txt in elementary\
+				#or(txt.isdigit() and(int(txt) in elementary)))
 
-	cond_bool = lambda *args: len(args==2) and(args[1] in "False True".split())
-	cond_list = lambda *args: True
+	#cond_bool = lambda *args: len(args==2) and(args[1] in "False True".split())
+	#cond_list = lambda *args: True
 
 	def getCondContainer(it, condition):
 		if not(condition in cond_raw):
@@ -301,7 +343,7 @@ class ruleConditions(ruleCommands):
 		idx = cond_raw.index(condition)
 		return conditions[idx][1]
 
-class ruleActions(ruleCommands):
+class ruleActions(rulePrims):
 
 	def _ld(it, action, bActive, txtArgs, comment_spc, comment):
 		from shlex import shlex as shx
@@ -328,8 +370,8 @@ class Rule():
 		it.bComment = False
 		it.comment = ''
 		it.sectName = ''
-		it.Conditions = ruleConditions(logger, cond_raw, "Condition")
-		it.Actions = ruleActions(logger, actn_raw, "Action")
+		it.Conditions = ruleConditions(logger, cond_raw, "Condition", debug=debug)
+		it.Actions = ruleActions(logger, actn_raw, "Action", debug=debug)
 
 	def load(it, lines, sectName='', ptr=0):
 		it.sectName = sectName
@@ -415,17 +457,16 @@ class Rule():
 		for aciion_key in it.Actions.keys:
 			it.Actions.deactivate(aciion_key)
 
-	def setColor(it, action, _r, _g, _b, _a=-1):
-		if action not in it.Actions.keys:
+	def setColor(it, actionColor, _r, _g, _b, _a=-1):
+		if not(it.Actions.has_lead(actionColor)):
 			return
-		rowColor = it.Actions[action]
-		if not(rowColor) or(len(rowColor)!=4):
-			return
-		bActive, args, comment_spc, comment = rowColor
+		bActive, args, comment_spc, comment = it.Actions[actionColor]
 		if len(args) not in(3, 4):
 			return
 		_args = ( _r, _g, _b) if  _a<0 else ( _r, _g, _b, _a)
-		it.Actions[action] = bActive, tuple(map(lambda x: str(x), _args)), comment_spc, comment
+		it.Actions.bWarning = False
+		it.Actions[actionColor] = bActive, tuple(map(lambda x: str(x), _args)), comment_spc, comment
+		it.Actions.bWarning = True
 
 	def tuneFontSize(it, old, new, noMatchErr=False):
 		rowFontSize = it.Actions['SetFontSize']
@@ -433,7 +474,9 @@ class Rule():
 			bActive, args, comment_spc, comment = rowFontSize
 			txtFontSize = args[0]
 			if txtFontSize.isdigit() and(int(txtFontSize)==old):
+				it.Actions.bWarning = False
 				it.Actions['SetFontSize'] = bActive, (str(new), ), comment_spc, comment
+				it.Actions.bWarning = True
 				return
 		if noMatchErr:
 			it._p("No mach search font size ", 'tgErr')
@@ -738,6 +781,8 @@ class nvrsnkSections(Element):
 	#get_sections_names = get_keys
 
 	def load(it, fnLoad):
+		global Data_pass
+		Data_pass = "Loading File"
 		#fnLoad = fnLoad+'ek'
 		def ldErr(fn):
 			for txtslice, cTag in( ("Can't open a file:", 2), ("'", 0), (hh(fnLoad), 1),("'\n", 0) ):
@@ -777,6 +822,7 @@ class nvrsnkSections(Element):
 				newSect.load(lines[pB:pB+3], lines[pB+3:], pB)
 			it.append(newSect)
 		it._d("Sections total: %d\n" % len(it))
+		Data_pass = "File Loaded"
 
 	def store(it, fnStore):
 		for txtslice, cTag in( ("Writing a file:", 2), ("'", 0), (hh(fnStore), 1),("'\n", 0) ):
