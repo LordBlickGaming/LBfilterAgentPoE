@@ -26,7 +26,11 @@ class mySinker:
 			"clicked", lambda xargs: mn.appSetFileName(select)), lsFiles)
 		ui.buttonConvert.connect("clicked", lambda w: mn.appConvert())
 		ui.buttonDiff.connect("clicked", lambda w: mn.appDiff())
+		ui.chkDbg.connect("toggled", mn.uiDebug)
 		mn._p = ui.logView.insert_end
+
+	def uiDebug(mn, check):
+		mn.dbg = bool(check.get_active())
 
 	def appUpdateFilename(mn, select, bUpEmptyTxt=True):
 		trans = cfgFiles(select)
@@ -77,9 +81,7 @@ class mySinker:
 	def appConvert(mn):
 		fn = mn.cfg['Main']['InFN']
 		from clFilterPoE import nvrsnkSections, Rule
-		#dbg = False
-		dbg = True
-		inFS = nvrsnkSections(mn._p, debug=dbg)
+		inFS = nvrsnkSections(mn._p, debug=mn.dbg)
 		inFS.load(fn)
 		if not(inFS.fnLoad):
 			return
@@ -104,7 +106,7 @@ class mySinker:
 			txtRule += '\n'
 			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
 			#print '\n'.join(linesRule)
-			newRule = Rule(mn._p, debug=dbg)
+			newRule = Rule(mn._p, debug=mn.dbg)
 			acquired = newRule.load(linesRule)
 			sect[0][0].insert(0, newRule)
 			#
@@ -122,7 +124,7 @@ class mySinker:
 			txtRule += '\n'
 			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
 			#print '\n'.join(linesRule)
-			newRule = Rule(mn._p, debug=dbg)
+			newRule = Rule(mn._p, debug=mn.dbg)
 			acquired = newRule.load(linesRule)
 			sect[0][0].insert(1, newRule)
 
@@ -258,7 +260,7 @@ class mySinker:
 			txtRule += 'Rarity Normal\nItemLevel >= 60\nSetFontSize 25\nSetTextColor 255 255 255\n'
 			txtRule += 'SetBorderColor 0 150 0 190\nSetBackgroundColor 20 70 30 128\n\n'
 			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
-			newRule = Rule(mn._p, debug=dbg)
+			newRule = Rule(mn._p, debug=mn.dbg)
 			acquired = newRule.load(linesRule)
 			sect[0][0].insert(1, newRule)
 		#Disable >=4L dropsound
@@ -319,9 +321,11 @@ class mySinker:
 			ui.cfg = mn.cfg['UI']
 			ui.dlgEngine = DialogEngine(ui)
 			ui.restoreGeometry()
+		ui.chkDbg.set_active(mn.cfg['Main']['Debug']=='True')
 
 	def appCfgStore(mn):
 		mn.ui.storeGeometry()
+		mn.cfg['Main']['Debug'] = ('False', 'True')[mn.dbg]
 		if mn.lastcfg!=(mn.cfg['Main'], mn.cfg['UI']):
 			mn.cfg.section_place('Main', 0)
 			mn.cfg.store()
@@ -334,6 +338,7 @@ class mySinker:
 		# Start time tick
 		from gobject import timeout_add as addTick
 		mn.chkThr = addTick(1000, mn.appCheckFilenames)
+		mn.dbg = False
 		mn.ui.uiEnter()
 
 	def appStop(mn):

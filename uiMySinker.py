@@ -91,6 +91,8 @@ class mySinker_UI:
 		ui.buttonConvert = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_CONVERT) #"Proceed..."
 		ui.buttonDiff = wg.Butt("Diff", mfm, 0,  0, 50)
 
+		ui.chkDbg = wg.Check("Debug", mfm, 0,  0, 50)
+
 		ui.toggWrap = wg.Toggle("Wrap words", mfm, 0,  0, 70)
 
 		ui.buttonClear = wg.Butt("Clear", mfm, 0,  0, 50)
@@ -144,6 +146,7 @@ class mySinker_UI:
 				y += wg.Height+5
 			mfm.move(ui.buttonConvert, 0, y)
 			mfm.move(ui.buttonDiff, 25, y)
+			mfm.move(ui.chkDbg, 80, y)
 			mfm.move(ui.toggWrap, w-225, y)
 			mfm.move(ui.buttonClear, w-150, y)
 			mfm.move(ui.buttonExit, w-95, y)
