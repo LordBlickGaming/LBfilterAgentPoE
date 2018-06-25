@@ -76,8 +76,8 @@ class Section(xlist):
 			elif (line[0], line[-1])==('[', ']') or(idx==ln_max):
 				return idx
 			elif '=' in line:
-				key, value = line.split('=', 1)
-				it[key.strip()] = value.lstrip()
+				key_, value = line.split('=', 1)
+				it[key_.strip()] = value.lstrip()
 				idx += 1
 			elif line.strip().startswith(';'): # comment
 				it.append( (None, line) )
@@ -90,49 +90,49 @@ class Section(xlist):
 			if idx==ln_max:
 				return idx # end of file
 
-	def get_place(it, key):
+	def get_place(it, key_):
 		names = it.keys()
-		if key in names:
-			return names.index(key)
+		if key_ in names:
+			return names.index(key_)
 		return None
 
-	def get_commented_place(it, key):
-		names = map(lambda (key, value): key.lstrip(';'), it)
-		if key in names:
-			return names.index(key)
+	def get_commented_place(it, key_):
+		names = map(lambda (key_, value): key_.lstrip(';'), it)
+		if key_ in names:
+			return names.index(key_)
 		return None
 
-	def __getitem__(it, key):
-		if type(key) is int:
-			return xlist.__getitem__(it, key)
-		elif it.has_key(key):
-			return xlist.__getitem__(it, it.get_place(key))[1]
+	def __getitem__(it, key_):
+		if type(key_) is int:
+			return xlist.__getitem__(it, key_)
+		elif it.has_key(key_):
+			return xlist.__getitem__(it, it.get_place(key_))[1]
 		else:
 			return None
 
 	get = __getitem__
 
-	def __setitem__(it, key, value):
-		if type(key) is int:
-			xlist.__setitem__(it, key, value)
+	def __setitem__(it, key_, value):
+		if type(key_) is int:
+			xlist.__setitem__(it, key_, value)
 			return
 		else:
-			idx = it.get_place(key)
+			idx = it.get_place(key_)
 			if idx is not None:
-				it[idx] = key, value
+				it[idx] = key_, value
 				return
-			idx = it.get_commented_place(key)
+			idx = it.get_commented_place(key_)
 			if idx is not None:
-				it[idx] = key, value
+				it[idx] = key_, value
 				return
 			else:
-				it.append( (key, value) )
+				it.append( (key_, value) )
 
 	dump_name = lambda it: "%s\n" % it.name
-	has_key = lambda it, key: key in it.keys()
+	has_key = lambda it, key_: key_ in it.keys()
 	items = lambda it: it.copy()
-	keys = lambda it: xlist(map(lambda (key, value): key, it))
-	values = lambda it: xlist(map(lambda (key, value): value, it))
+	keys = lambda it: xlist(map(lambda (key_, value): key_, it))
+	values = lambda it: xlist(map(lambda (key_, value): value, it))
 
 	def place(it, name, value, index=None):
 		if type(index) is int and(index<len(it)):
@@ -149,15 +149,15 @@ class Section(xlist):
 			return
 		it.pop(idx)
 
-	def deactivate(it, key):
-		if type(key) is int:
-			if key>=len(it):
-				raise IndexError( "index '%i' out of range'0 - %i'" % (key, len(it)-1))
-			key = it[key][0]
-		idx = it.get_place(key)
+	def deactivate(it, key_):
+		if type(key_) is int:
+			if key_>=len(it):
+				raise IndexError( "index '%i' out of range'0 - %i'" % (key_, len(it)-1))
+			key_ = it[key_][0]
+		idx = it.get_place(key_)
 		if idx is None:
 			return
-		it[idx] = ';'+key, it[key]
+		it[idx] = ';'+key_, it[key_]
 
 	def write_out(it):
 		out = "[%s]\n" % it.name
@@ -186,28 +186,28 @@ class IniSections(xlist):
 		instance.load(file_name, dbg=dbg)
 		return instance
 
-	def __getitem__(it, key):
-		if type(key) is int:
-			return xlist.__getitem__(it, key)
-		elif it.has_key(key):
-			return xlist.__getitem__(it, it.get_place(key))
+	def __getitem__(it, key_):
+		if type(key_) is int:
+			return xlist.__getitem__(it, key_)
+		elif it.has_key(key_):
+			return xlist.__getitem__(it, it.get_place(key_))
 		else:
 			new_section = Section()
-			new_section.name = key
+			new_section.name = key_
 			it.append(new_section)
-			return it[key]
+			return it[key_]
 
 	get_section = __getitem__
 
-	def __setitem__(it, key, value):
-		if type(key) is int:
-			xlist.__setitem__(it, key, value)
-		elif it.has_key(key):
-			xlist.__setitem__(it, it.get_place(key), value)
+	def __setitem__(it, key_, value):
+		if type(key_) is int:
+			xlist.__setitem__(it, key_, value)
+		elif it.has_key(key_):
+			xlist.__setitem__(it, it.get_place(key_), value)
 		return
 
 	keys = lambda it: xlist(map(lambda section: section.name, it))
-	has_key = lambda it, key: key in it.keys()
+	has_key = lambda it, key_: key_ in it.keys()
 	get_sections_names = lambda it: tuple(it.keys())
 	dump_sections_names = lambda it: ', '.join(it.get_sections_names())+'\n'
 
