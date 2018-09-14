@@ -31,7 +31,9 @@ in_range = lambda _val, _min, _max: _val in _range(_min, _max)
 _byte = _range(0, 255)
 _byte = _range(0, 255)
 _nan_byte = (None,)+_byte # not always needed
-
+_ef_colors =  'Red Green Blue Brown White Yellow'.split
+_ef_shapes = 'Circle Diamond Hexagon Square Star Triangle'.split
+_ef_temp = (None, 'Temp')
 cond_bool             = 1
 cond_list             = 2
 cond_list_multi       = 3
@@ -47,19 +49,20 @@ conditions = (
 	("Identified",     cond_bool),
 	("LinkedSockets",  cond_compare_or_space, _range(1, 6)),
 	("Sockets",        cond_compare_or_space, _range(1, 6)),
-	("SocketGroup",    cond_match_re,         r"^[RGBW]{1,6}$"),
-	("StackSize",      cond_compare_or_space, (1, 1000)),
+	("MapTier",      cond_compare_or_space, (1, 20)),
 	("Width",          cond_compare_or_space, (1, 2)),
 	("Height",         cond_compare_or_space, _range(1, 4)),
 	("Quality",        cond_compare_or_space, _range(1, 30)),
 	("ItemLevel",      cond_compare_or_space, _range(1, 100)),
 	("DropLevel",      cond_compare_or_space, _range(1, 100)),
+	("Rarity",        cond_compare_or_space, dcRarity),
 	("Class",          cond_list),
-	("GemLevel",       cond_compare_or_space, (1, 30)),
 	("ElderMap",       cond_bool),
 	("BaseType",       cond_list),
+	("StackSize",      cond_compare_or_space, (1, 1000)),
+	("SocketGroup",    cond_match_re,         r"^[RGBW]{1,6}$"),
+	("GemLevel",       cond_compare_or_space, (1, 30)),
 	("HasMod",         cond_list),
-	("Rarity",        cond_compare_or_space, dcRarity),
 	("HasExplicitMod", cond_list_multi),
 	)
 cond_raw = tuple(map(lambda n: n[0], conditions))
@@ -78,6 +81,8 @@ actions = (
 	#						Choice			Volume
 	("PlayAlertSound", _range(1, 16), _range(0, 300)),
 	("DisableDropSound",),
+	("MinimapIcon", _range(0, 2), _ef_colors, _ef_shapes),
+	('PlayEffect', _ef_colors, _ef_temp),
 	)
 actn_raw = tuple(map(lambda n: n[0], actions))
 which_action = lambda txt: actn_raw.index(txt)+1 if txt in actn_raw else 0
@@ -491,7 +496,7 @@ class Rule():
 				return True
 		return False
 
-	def srch_in_comments(it, txt):
+	def srch_rule_comments(it, txt, noMatchErr=None, level=-1):
 		if txt in it.comment:
 			return True
 		for row in (it.Conditions+it.Actions):
@@ -566,6 +571,27 @@ class Element(xlist):
 			else:
 				sectName = it.sectName
 			it._p("Search error for BaseType:", 'tgErr')
+			it._p("%s" % txt, 'tgPhrase')
+			it._p(" in section „", 'tgErr')
+			it._p("%s" % sectName, 'tgPhrase')
+			it._p("” - It's possible that NeverSink changed it…\n", 'tgErr')
+		return tuple(results)
+
+	def srch_rule_comments(it, txt, noMatchErr=False, level=0):
+		child_level = level+1
+		results = []
+		for child in it:
+			match_rules = child.srch_rule_comments(txt, noMatchErr=noMatchErr, level=child_level)
+			if match_rules:
+				results += match_rules
+		if noMatchErr and not(results) and(level==0): # display error only on recurency top
+			if isinstance(it, nvrsnkSections):
+				sectName = "root"
+			elif isinstance(it, Section):
+				sectName = it.name
+			else:
+				sectName = it.sectName
+			it._p("Search error for Comment:", 'tgErr')
 			it._p("%s" % txt, 'tgPhrase')
 			it._p(" in section „", 'tgErr')
 			it._p("%s" % sectName, 'tgPhrase')
