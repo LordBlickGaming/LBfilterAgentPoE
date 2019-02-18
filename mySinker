@@ -3,12 +3,18 @@
 # -*- coding: utf-8 -*-
 # -*- tabstop: 4 -*-
 
-from clIniFile import IniSections, _p, xlist
-from clFilterPoE import nvrsnkSections, Rule
+from clIniFile import IniSections, _p, xlist, hh
+from clFilterPoE import nvrsnkSections, Rule, _d
 from uiMySinker import wg
 from os import path as ph
 from uiMySinker import lsFiles
+from clZip import ztree as zt, zunp as zu
 cfgFiles = lambda key: "%sFN" % key if key in lsFiles else None
+_y = lambda _bool: ('No', 'Yes')[_bool]
+
+VERSION = '0.9'
+Strictneses = 'Soft', 'Regular', 'Semi-Strict', 'Strict', 'Very-Strict', 'Uber-Strict', 'Uber-Plus-Strict'
+Styles = 'Default', 'Azurite', 'Blue', 'CustomSounds', 'Gaia', 'Purple', 'Slick', 'Vaal', 'Velvet'
 
 class mySinker:
 	def __init__(mn):
@@ -18,7 +24,7 @@ class mySinker:
 		mn.ui.uiEnter()
 
 	uiFn = lambda mn, fileName: fileName.replace(ph.expanduser('~'), '~')
-	otFn = lambda mn, fileName: fileName.replace('NeverSink', 'MySink')
+	otFn = lambda mn, fileName: fileName.replace('NeverSink', mn.cfg['Main']['ModName'])
 
 	def uiInit(mn):
 		from uiMySinker import mySinker_UI
@@ -26,18 +32,77 @@ class mySinker:
 		ui.mainWindow.connect("destroy", lambda w: mn.appExit())
 		mn._p = ui.logView.insert_end
 
+	def _d(mn, *k, **kk):
+		return (mn.ui.logView.insert_end(*k, **kk) if mn.dbg else _d(*k, **kk))
+
 	def uiConn(mn):
 		ui = mn.ui
 		ui.buttonExit.connect("clicked", lambda w: mn.appExit())
 		map(lambda select: getattr(ui, "buttonFileName"+select).connect(
 			"clicked", lambda xargs: mn.appSetFileName(select)), lsFiles)
+		ui.buttonUnZip.connect("clicked", lambda w: mn.appUnZip())
 		ui.buttonConvert.connect("clicked", lambda w: mn.appConvert())
 		ui.buttonDiff.connect("clicked", lambda w: mn.appDiff())
 		ui.chkDbg.connect("toggled", mn.uiDebug)
+		d = ui.dlgs
+		for ui_pref in d.lsUpdate:
+			if mn.cfg['Main'][ui_pref]:
+				setattr(d, ui_pref, mn.cfg['Main'][ui_pref])
+		d.PreferencesStore = mn.appNewPreferences
+		ui.buttonPreferences.connect("clicked", lambda w: mn.appPreferences())
+
+	def appPreferences(mn):
+		mn.ui.dlgs.showDlgPref(Strictneses, Styles, mn.appLeaguesList)
+
+	def appNewPreferences(mn):
+		d =  mn.ui.dlgs
+		for ui_pref in d.lsUpdate:
+			mn.cfg['Main'][ui_pref] = getattr(d, ui_pref)
+		mn.appUpdateFilenames()
 
 	def uiDebug(mn, check):
 		mn.dbg = bool(check.get_active())
-		print("Debug: %s" % str(mn.dbg))
+		#print("Debug: %s" % str(mn.dbg))
+
+	def appLeaguesList(mn):
+		# - cached locally until any of league or 2-week of last check expires.
+		#Probably not necessary - laded in UI stays to close app and rare use…
+		import json
+		jsonLeagues = None
+		import httplib
+		headers = {
+			'Accept' : 'text/plain',
+			'charset' : 'utf-8',
+			'User-agent' : ("LBfilterAgentPoE/%s" % VERSION)}
+		host, request = 'api.pathofexile.com', '/leagues?type=main'
+		mn._p("connecting to host „")
+		mn._p(host, 'tgFileName')
+		mn._p("” with request„")
+		mn._p(request, 'tgFileName')
+		mn._p("”:\n")
+		connHttp = httplib.HTTPConnection(host)
+		connHttp.request('GET', request, '', headers)
+		respHttp = connHttp.getresponse()
+		if respHttp.status == 200:
+			mn._p("Got leagues Info…\n")
+			leaguesTxt = respHttp.read()
+			jsonLeagues = json.loads(leaguesTxt)
+		else:
+			mn._p("Error:%s - %s\n" % (respHttp.status, respHttp.reason), 'tgErr')
+		connHttp.close()
+		if not(jsonLeagues):
+			return []
+		lsLeague = []
+		for idx, league in enumerate(jsonLeagues):
+			mn._d("ID: „%s”, Desc: „%s”\n" % (str(league['id']), str(league['description'])))
+			mn._d("  Start: %s\n" % str(league['startAt']))
+			mn._d("  Ends: %s\n" % str(league['endAt']))
+			mn._d("  Registerable from: %s\n" % str(league['registerAt']))
+			mn._d("  Ladder: %s\n" % str(league['url']))
+			mn._d("  Is It Event?: %s\n" % _y(league['event']))
+			mn._d("  Delving allowed?: %s\n" % _y(league['delveEvent']))
+			lsLeague.append(str(league['id']))
+		return lsLeague
 
 	def appUpdateFilename(mn, select, bUpEmptyTxt=True):
 		trans = cfgFiles(select)
@@ -67,8 +132,9 @@ class mySinker:
 				lsCheck.append(t)
 			else:
 				lsCheck.append(ph.isfile(cfgPath))
-		#ui.buttonConvert.set_sensitive(not(False in lsCheck))
 		ui.buttonConvert.set_sensitive(all(lsCheck))
+		ui.buttonUnZip.set_sensitive(ph.isfile(mn.cfg['Main'][cfgFiles('Zip')]))
+		ui.buttonDiff.set_sensitive(all([ph.isfile(mn.cfg['Main'][cfgFiles(select)]) for select in 'In Out'.split()]))
 		return True
 
 	def appSetFileName(mn, select):
@@ -77,13 +143,86 @@ class mySinker:
 			return
 		inputFN = mn.cfg['Main'][trans]
 		lastDir = ph.dirname(inputFN) if inputFN else mn.ui.runpath
+		fnFilter = (mn.ui.poeFilterZip, mn.ui.poeFilter)[select in('In', 'Out')]
 		newFilename = wg.dialogChooseFile(parent=mn.ui.mainWindow,
-			startDir=lastDir, filters=(mn.ui.poeFilter,),
-			title=("Select file to %s" % ('read', 'write')[select=='Out']), bShowHidden=True,
+			startDir=lastDir, filters=(fnFilter,),
+			title=("Select file to %s" % {'Zip':'unzip', 'In':'read', 'Out':'write'}[select]), bShowHidden=True,
 			act=('file_open', 'file_save')[select=='Out'])
 		if newFilename:
 			mn.cfg['Main'][trans] = newFilename
+			if select=='Zip':
+				#master rename mode ;)
+				mn.appUpdateFilenames()
 		mn.appUpdateFilename(select)
+
+	def badZip(mn):
+			mn._p("Error: Selected zip file „", 'tgErr')
+			mn._p(hh(zip_fn), 'tgFileName')
+			mn._p("” can not be recognized!\n", 'tgErr')
+
+	def tstZip(mn):
+		zip_fn = mn.cfg['Main']['ZipFN']
+		if not(zip_fn):
+			mn._p("Error: Select proper zip filename!\n", 'tgErr')
+			return None
+		if (not(ph.isfile(zip_fn))):
+			mn._p("Error: Selected zip filename „", 'tgErr')
+			mn._p(hh(zip_fn), 'tgFileName')
+			mn._p("” does not exist!\n", 'tgErr')
+			return None
+		root_in_zip_dn = zt(zip_fn)[0]
+		nm_dt = root_in_zip_dn[:-1].split('-')
+		if root_in_zip_dn[-1]=='/' and(len(nm_dt)==3):
+			filter_name, _, ver = nm_dt
+			return filter_name, ver, root_in_zip_dn
+		else:
+			mn.badZip()
+			return None
+
+	def appUpdateFilenames(mn):
+		in_dn = ph.dirname(mn.cfg['Main'][cfgFiles('In')])
+		out_dn = ph.dirname(mn.cfg['Main'][cfgFiles('Out')])
+		tst = mn.tstZip()
+		if tst:
+			filter_name, ver, _ = tst
+			common_nm = '-'.join((ver, mn.cfg['Main']['League'], mn.cfg['Main']['Strictness']))
+			if mn.cfg['Main']['Style']!='Default':
+				common_nm += '-'+mn.cfg['Main']['Style']
+			common_nm += '.filter'
+			mn.cfg['Main'][cfgFiles('In')] = "%s/%s-%s" % (in_dn, filter_name, common_nm)
+			mn.cfg['Main'][cfgFiles('Out')] = "%s/%s-%s" % (out_dn, mn.cfg['Main']['ModName'], common_nm)
+			for select in 'In Out'.split():
+				mn.appUpdateFilename(select)
+
+	def appListZip(mn):
+		zip_fn = mn.cfg['Main']['ZipFN']
+		mn._p("Zip file „")
+		mn._p(hh(zip_fn), 'tgFileName')
+		mn._p("” has files:\n")
+		for fn in zip_files:
+			mn._p("„")
+			mn._p(str(fn), 'tgFileName')
+			mn._p("”\n")
+
+	def appUnZip(mn):
+		tst = mn.tstZip()
+		if tst:
+			filter_name, ver, root_in_zip_dn = tst
+			zip_fn = mn.cfg['Main']['ZipFN']
+			extract_fn = root_in_zip_dn
+			if mn.cfg['Main']['Style']!='Default':
+				extract_fn += "(STYLE) %s/" % mn.cfg['Main']['Style'].upper()
+			Strictness = mn.cfg['Main']['Strictness']
+			if not(Strictness in Strictneses):
+				mn.badZip()
+				return
+			strct_idx = Strictneses.index(Strictness)
+			extract_fn += "NeverSink's filter - %d-%s" % (strct_idx, Strictness.upper())
+			if mn.cfg['Main']['Style']!='Default':
+				extract_fn += " (%s) " % mn.cfg['Main']['Style']
+			extract_fn += ".filter"
+			unzipped_fn = mn.cfg['Main']['InFN']
+			zu(zip_fn, extract_fn, unzipped_fn)
 
 	def appConvert(mn):
 		fn = mn.cfg['Main']['InFN']
@@ -373,6 +512,12 @@ class mySinker:
 			ui.dlgEngine = DialogEngine(ui)
 			ui.restoreGeometry()
 		mn.dbg = (mn.cfg['Main']['Debug']=='True')
+		if not(mn.cfg['Main']['ModName']):
+			mn.cfg['Main']['ModName'] = 'MySink'
+		if not(mn.cfg['Main']['Style']):
+			mn.cfg['Main']['Style'] = 'Default'
+		if not(mn.cfg['Main']['Strictness']):
+			mn.cfg['Main']['Strictness'] = 'Regular'
 		ui.chkDbg.set_active(mn.dbg)
 
 	def appCfgStore(mn):
