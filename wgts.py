@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 # -*- tabstop: 4 -*-
 
-'© Copyrighrt 2015 by LordBlick (at) gmail.com'
+'© Copyrighrt 2015-2019 by LordBlick (at) gmail.com'
 
 import gtk, pango
 

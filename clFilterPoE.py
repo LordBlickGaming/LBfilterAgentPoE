@@ -4,7 +4,6 @@
 # -*- tabstop: 4 -*-
 
 
-#from clIniFile import _p, _dbg, xlist
 from clIniFile import xlist, hh
 from os import path as ph
 import re
@@ -63,6 +62,7 @@ conditions = (
 	("SocketGroup",    cond_match_re,         r"^[RGBW]{1,6}$"),
 	("GemLevel",       cond_compare_or_space, (1, 30)),
 	("HasMod",         cond_list),
+	("Prophecy",         cond_list),
 	("HasExplicitMod", cond_list_multi),
 	)
 cond_raw = tuple(map(lambda n: n[0], conditions))
@@ -153,8 +153,6 @@ class rulePrims(xlist):
 			_lm = it[idx]
 			#Ugly workaround - usually no need to edit conditions
 			_lm.append(value)
-			#print("%s[%d] = %s, replaced by „%s”" % (
-				#key_, idx, str(_lm), repr(value)))
 			it[idx] = key, _lm # call  numeric rewrite
 			return
 		elif it.has_key(("%s_Hi" % key)) and(it.has_key(("%s_Lo" % key))):
@@ -239,10 +237,6 @@ class rulePrims(xlist):
 			it._p("\n\tright:", 'tgErr')
 			it._p((" %s\n" % str(leading_right)), 'tgPhrase')
 		return True
-		#try:
-		#except Exception as e:
-			#print("Exception[%s] see: %s" % (command, str(it[command])))
-			#raise e
 
 	get_args = lambda it, command: it.get_lead(command, 'args')
 	set_args = lambda it, command, arg_tuple: it.set_lead(command, 'args', arg_tuple) #need tuple check…
@@ -294,7 +288,6 @@ class rulePrims(xlist):
 
 	def argtuple(it, txt):
 		from shlex import shlex as shx
-		#argspt = shx(txt.rstrip('\n').replace('\\"', '&quot;'))
 		argspt = shx(txt.strip())
 		argspt.wordchars += "µΩ!@#$%^&*+-‐=.,;~/()<>[]"
 		argspt.commenters = ''
@@ -307,32 +300,6 @@ class ruleConditions(rulePrims):
 		args = it.argtuple(txtArgs)
 		#TODO: Validate args
 		it[condition] =  bActive, args, comment_spc, comment
-
-	#def cond_compare_or_space(it, elementary, *args):
-		#cArg = len(args)
-		#if cArg==3:
-			#if not(reCompares.match(arg[1])):
-				#return False
-			#txt = arg[2]
-		#elif cArg==2:
-			#txt = arg[1]
-		#else:
-			#it._p("Incorrect number of operators: ", 'tgErr')
-			#it._p("%d" % (cArg), 'tgEnum')
-			#it._p(" in ", 'tgErr')
-			#it._p("(%s)" % (', '.join(args)), 'tgPhrase')
-			#it._p(" when ", 'tgErr')
-			#it._p("2", 'tgEnum')
-			#it._p("-", 'tgErr')
-			#it._p("3", 'tgEnum')
-			#it._p(" required.\n", 'tgErr')
-			#return False
-		#return hasattr(elementary, "__iter__")\
-			#and(txt in elementary\
-				#or(txt.isdigit() and(int(txt) in elementary)))
-
-	#cond_bool = lambda *args: len(args==2) and(args[1] in "False True".split())
-	#cond_list = lambda *args: True
 
 	def getCondContainer(it, condition):
 		if not(condition in cond_raw):
@@ -362,7 +329,7 @@ reAppear = re.compile(
 	+r')|(?:'.join(appears)\
 	+r"))(?P<spc>\s*)(?P<comment>#.*)?$", re.I|re.U)
 
-def _d(*x):
+def _d(*x, **xx):
 	pass
 
 class Rule():
@@ -385,8 +352,23 @@ class Rule():
 		it._d(u" New Rule")
 		ptrBody = None
 		bGotAppear = False
+		cLines = len(lines)
 		for idx, line in enumerate(lines):
-			if bGotAppear:
+			if not(bGotAppear): # Searching for „Show” or „Hide”
+				m = reAppear.match(line)
+				if not(m):
+					continue # maybe in next line…?
+				it.active = not(bool(m.group("inactive")))
+				it.Appear = m.group("appear")
+				comment = m.group("comment")
+				it.bComment = bool(comment)
+				it.comment = '' if not(bool(comment)) else comment[1:] # Del „#”
+				it.headlines = tuple(lines[:idx])
+				ptrBody = ptr+idx
+				it._d("; body in line:")
+				it._d(("%4.d" % (ptrBody+1)), 'tgEnum')
+				bGotAppear = True
+			else:# „Show” or „Hide” found…
 				m = reCondition.match(line)
 				if m:
 					bActive = not(bool(m.group("inactive")))
@@ -414,25 +396,21 @@ class Rule():
 				it._d(", last one:")
 				it._d(("%4.d\n" % (ptr+idx)), 'tgEnum') # must be (next - 1) so ptr is OK
 				return idx #return lines acquired
-			else:
-				m = reAppear.match(line)
-				if not(m):
-					continue
-				it.active = not(bool(m.group("inactive")))
-				it.Appear = m.group("appear")
-				comment = m.group("comment")
-				it.bComment = bool(comment)
-				it.comment = '' if not(bool(comment)) else comment[1:] # Del „#”
-				it.headlines = tuple(lines[:idx])
-				ptrBody = ptr+idx
-				it._d("; body in line:")
-				it._d(("%4.d" % (ptrBody+1)), 'tgEnum')
-				bGotAppear = True
-		cLines = len(lines)
+		# All lines searched and no „Show” or „Hide” found…
 		it._d(u" - without commands, lines count:")
 		it._d(("%4.d" % (cLines)), 'tgEnum')
 		it._d(", last one:")
 		it._d(("%4.d\n" % (ptr+cLines)), 'tgEnum') # must be (next - 1) so ptr is OK
+		if cLines>1 and(bGotAppear):
+			it._p("Strange ruleset with ", 'tgErr')
+			it._p("%d lines"% cLines, 'tgEnum')
+			it._p(" and „Show” or „Hide” detected", 'tgErr')
+			it._p(" in section „", 'tgErr')
+			it._p("%s" % it.sectName, 'tgPhrase')
+			it._p("”:\n", 'tgErr')
+			it._p("idx:%d\n" % idx, 'tgErr')
+			it._p("Dump:\n", 'tgErr')
+			it._p("%s\n" % '\n'.join(lines), 'tgPhrase')
 		it.headlines = tuple(lines)
 		return cLines #return lines acquired
 
@@ -447,6 +425,9 @@ class Rule():
 		txt_st += it.Conditions._st(it.active)
 		txt_st += it.Actions._st(it.active)
 		return txt_st
+
+	def show(it, bYes):
+		it.Appear = ('Hide', 'Show')[int(bYes)]
 
 	def activate(it):
 		it.active = True
@@ -484,7 +465,7 @@ class Rule():
 				it.Actions.bWarning = True
 				return
 		if noMatchErr:
-			it._p("No mach search font size ", 'tgErr')
+			it._p("No match search font size ", 'tgErr')
 			it._p("%d"% old, 'tgEnum')
 			it._p(" in section „", 'tgErr')
 			it._p("%s" % it.sectName, 'tgPhrase')
@@ -496,20 +477,28 @@ class Rule():
 				return True
 		return False
 
+	def get_condition_args(it, txt):
+		row = it.Conditions[txt]
+		print(txt, '→', row)
+		if row and(len(row)==4):
+			_, args, _, _ = row
+			return args
+		else:
+			return None
+
 	def srch_rule_comments(it, txt, noMatchErr=None, level=-1):
 		if txt in it.comment:
-			return True
+			return (it, )
 		for row in (it.Conditions+it.Actions):
 			comment = row[-1]
 			if isinstance(comment, basestring) and(txt in comment):
-				return True
-		return False
+				return (it, )
+		return None
 
 	def srch_rule_basetype(it, txt, noMatchErr=None, level=-1):
 		baseRow = it.Conditions['BaseType']
 		if baseRow and(len(baseRow)==4):
 			_, args, _, _ = baseRow
-			#sargs = map(lambda x: x.strip('"'), args)
 			for arg in args:
 				if txt in arg:
 					return (it, )
@@ -551,6 +540,9 @@ class Element(xlist):
 	def deactivate(it):
 		for child in it:
 			child.deactivate()
+
+	def erase(it):
+		it.__init__(it._p)
 
 	def setColor(it, *args):
 		for child in it:
@@ -676,7 +668,6 @@ class Subsection(Element):
 			#skip
 			it.Id = -1
 		cSkip = 0
-		#return
 		ptrSubBody = ptrSub + int(bGotHead)*3
 		lsB = []
 		cLines = len(bodyLines)
@@ -684,6 +675,13 @@ class Subsection(Element):
 		it._d(("%4.d" % (cLines)), 'tgEnum')
 		it._d(", last one:")
 		it._d(("%4.d\n" % (ptrSubBody+cLines)), 'tgEnum') # must be (next - 1) so ptr is OK
+		if bodyLines[-1]!='' and(sectName!="Head"):
+			it._d('\n')
+			it._p("Warning! Added empty line (currently not present) at the end of subsection „%s”[" % (it.name), 'tgWarn')
+			it._p("%04d" % (it.Id), 'tgEnum')
+			it._p("],\n in section „%s”, source file line number:" % (sectName), 'tgWarn')
+			it._p(("%4.d\n\n" % (ptrSubBody+cLines+1)), 'tgEnum')
+			bodyLines.append('')
 		for idx, line in enumerate(bodyLines):
 			if cLines-idx<2:
 				continue
@@ -700,8 +698,9 @@ class Subsection(Element):
 		maxDiv = cDivis - 1
 		if cDivis:
 			if lsB[0]>0:
+				divBodyLines = bodyLines[:lsB[0]]
 				defaultDiv = Division(it._p, debug=not(it._d==_d))
-				defaultDiv.load((), bodyLines[:lsB[0]], sectName, ptrSubBody)
+				defaultDiv.load((), divBodyLines, sectName, ptrSubBody)
 				it.append(defaultDiv)
 			for idx, pB in enumerate(lsB):
 				newDiv = Division(it._p, debug=not(it._d==_d))
@@ -716,7 +715,6 @@ class Subsection(Element):
 			defaultDiv = Division(it._p, debug=not(it._d==_d))
 			defaultDiv.load((), bodyLines, sectName, ptrSubBody)
 			it.append(defaultDiv)
-		#it._d("    Divisions total: %d\n" % len(it))
 
 class Section(Element):
 	def _init(it):
@@ -795,7 +793,6 @@ class Section(Element):
 			defaultSubsect = Subsection(it._p, debug=not(it._d==_d))
 			defaultSubsect.load((), bodyLines, it.name, ptrSectBody)
 			it.append(defaultSubsect)
-		#it._d("  Subsections total: %d\n" % len(it))
 
 	def getSubsecttionById(it, Id):
 		for idx, ssect in enumerate(it):
@@ -804,12 +801,10 @@ class Section(Element):
 		return None
 
 class nvrsnkSections(Element):
-	#get_sections_names = get_keys
 
 	def load(it, fnLoad):
 		global Data_pass
 		Data_pass = "Loading File"
-		#fnLoad = fnLoad+'ek'
 		def ldErr(fn):
 			for txtslice, cTag in( ("Can't open a file:", 2), ("'", 0), (hh(fnLoad), 1),("'\n", 0) ):
 				it._p(txtslice, tag=(None, 'tgFileName', 'tgFindErr')[cTag])
