@@ -245,6 +245,11 @@ class rulePrims(xlist):
 	get_args = lambda it, command: it.get_lead(command, 'args')
 	set_args = lambda it, command, arg_tuple: it.set_lead(command, 'args', arg_tuple) #need tuple check…
 
+	def replace_args(it, command, arg_tuple):
+		it.bWarning = False
+		it.set_args(command, arg_tuple)
+		it.bWarning = True
+
 	def activate(it, key):
 		it.bWarning = False
 		it.set_lead(key, 'activity', True)
@@ -346,11 +351,13 @@ class Rule():
 		it.bComment = False
 		it.comment = ''
 		it.sectName = ''
+		it.ssectId = ''
 		it.Conditions = ruleConditions(logger, cond_raw, "Condition", debug=debug)
 		it.Actions = ruleActions(logger, actn_raw, "Action", debug=debug)
 
-	def load(it, lines, sectName='', ptr=0):
+	def load(it, lines, sectName='', ssectId='', ptr=0):
 		it.sectName = sectName
+		it.ssectId = ssectId
 		startLine = ptr+1 # line no = ptr+1
 		it._d(("      %4.d: " % (startLine)), 'tgEnum')
 		it._d(u" New Rule")
@@ -473,6 +480,8 @@ class Rule():
 			it._p("%d"% old, 'tgEnum')
 			it._p(" in section „", 'tgErr')
 			it._p("%s" % it.sectName, 'tgPhrase')
+			it._p("” and subsection „", 'tgErr')
+			it._p("%s" % it.ssectId, 'tgPhrase')
 			it._p("” - It's possible that NeverSink changed it…\n", 'tgErr')
 
 	def srch_in_headlines(it, txt):
@@ -595,8 +604,13 @@ class Element(xlist):
 		return tuple(results)
 
 class Division(Element):
-	def load(it, headLines, bodyLines, sectName, ptrDiv):
+	def __init__(it, logger, debug):
+		Element.__init__(it, logger, debug)
+		it.ssectId = ''
+
+	def load(it, headLines, bodyLines, sectName, ssectId, ptrDiv):
 		it.sectName = sectName
+		it.ssectId = ssectId
 		it.headlines = headLines
 		startLine = ptrDiv+1 # line no = ptr+1
 		it._d(("    %4.d: " % (startLine)), 'tgEnum')
@@ -633,7 +647,7 @@ class Division(Element):
 		slc = 0
 		while ptr<ptrDivisionEnd:
 			newRule = Rule(it._p, debug=not(it._d==_d))
-			acquired = newRule.load(bodyLines[slc:], sectName, ptr)
+			acquired = newRule.load(bodyLines[slc:], sectName, ssectId, ptr)
 			slc += acquired
 			ptr += acquired
 			it.append(newRule)
@@ -704,20 +718,20 @@ class Subsection(Element):
 			if lsB[0]>0:
 				divBodyLines = bodyLines[:lsB[0]]
 				defaultDiv = Division(it._p, debug=not(it._d==_d))
-				defaultDiv.load((), divBodyLines, sectName, ptrSubBody)
+				defaultDiv.load((), divBodyLines, sectName, it.Id, ptrSubBody)
 				it.append(defaultDiv)
 			for idx, pB in enumerate(lsB):
 				newDiv = Division(it._p, debug=not(it._d==_d))
 				ptrSubBody = ptrSub + pB + int(bGotHead)*3
 				if idx<maxDiv:
-					newDiv.load(bodyLines[pB:pB+3], bodyLines[pB+3:lsB[idx+1]], sectName, ptrSubBody)
+					newDiv.load(bodyLines[pB:pB+3], bodyLines[pB+3:lsB[idx+1]], sectName, it.Id, ptrSubBody)
 				else:
-					newDiv.load(bodyLines[pB:pB+3], bodyLines[pB+3:], sectName, ptrSubBody)
+					newDiv.load(bodyLines[pB:pB+3], bodyLines[pB+3:], sectName, it.Id, ptrSubBody)
 				it.append(newDiv)
 		#Assume default Division here
 		else:
 			defaultDiv = Division(it._p, debug=not(it._d==_d))
-			defaultDiv.load((), bodyLines, sectName, ptrSubBody)
+			defaultDiv.load((), bodyLines, sectName, it.Id, ptrSubBody)
 			it.append(defaultDiv)
 
 class Section(Element):
