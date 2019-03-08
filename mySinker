@@ -12,7 +12,7 @@ from clZip import ztree as zt, zunp as zu
 cfgFiles = lambda key: "%sFN" % key if key in lsFiles else None
 _y = lambda _bool: ('No', 'Yes')[_bool]
 
-VERSION = '0.9'
+VERSION = '0.91'
 Strictneses = 'Soft', 'Regular', 'Semi-Strict', 'Strict', 'Very-Strict', 'Uber-Strict', 'Uber-Plus-Strict'
 Styles = 'Default', 'Azurite', 'Blue', 'CustomSounds', 'Gaia', 'Purple', 'Slick', 'Vaal', 'Velvet'
 
@@ -40,6 +40,7 @@ class mySinker:
 		ui.buttonExit.connect("clicked", lambda w: mn.appExit())
 		map(lambda select: getattr(ui, "buttonFileName"+select).connect(
 			"clicked", lambda xargs: mn.appSetFileName(select)), lsFiles)
+		ui.buttonLastRel.connect("clicked", lambda w: mn.appNvrsRelease())
 		ui.buttonUnZip.connect("clicked", lambda w: mn.appUnZip())
 		ui.buttonConvert.connect("clicked", lambda w: mn.appConvert())
 		ui.buttonDiff.connect("clicked", lambda w: mn.appDiff())
@@ -64,34 +65,47 @@ class mySinker:
 		mn.dbg = bool(check.get_active())
 		#print("Debug: %s" % str(mn.dbg))
 
-	def appLeaguesList(mn):
-		# - cached locally until any of league or 2-week of last check expires.
-		#Probably not necessary - laded in UI stays to close app and rare use…
+	def apiJSON(mn, host, request, secure=False):
+		jsonData = None
 		import json
-		jsonLeagues = None
 		import httplib
 		headers = {
-			'Accept' : 'text/plain',
+			#'Accept' : 'text/plain',
+			'Accept' : 'application/json',
 			'charset' : 'utf-8',
 			'User-agent' : ("LBfilterAgentPoE/%s" % VERSION)}
-		host, request = 'api.pathofexile.com', '/leagues?type=main'
 		mn._p("connecting to host „")
 		mn._p(host, 'tgFileName')
 		mn._p("” with request„")
 		mn._p(request, 'tgFileName')
 		mn._p("”:\n")
-		connHttp = httplib.HTTPConnection(host)
-		connHttp.request('GET', request, '', headers)
-		respHttp = connHttp.getresponse()
-		if respHttp.status == 200:
-			mn._p("Got leagues Info…\n")
-			leaguesTxt = respHttp.read()
-			jsonLeagues = json.loads(leaguesTxt)
+		if secure:
+			connWeb = httplib.HTTPSConnection(host)
 		else:
-			mn._p("Error:%s - %s\n" % (respHttp.status, respHttp.reason), 'tgErr')
-		connHttp.close()
+			connWeb = httplib.HTTPConnection(host)
+		connWeb.request('GET', request, '', headers)
+		respWeb = connWeb.getresponse()
+		if respWeb.status == 200:
+			respBody = respWeb.read()
+			jsonData = json.loads(respBody)
+		else:
+			mn._p("Error:%s - %s\n" % (respWeb.status, respWeb.reason), 'tgErr')
+		connWeb.close()
+		return jsonData
+
+	def githubJSON(mn, user, repo):
+		host = 'api.github.com'
+		request = "/repos/%s/%s/releases/latest" % (user, repo)
+		return mn.apiJSON(host, request, True)
+
+	def appLeaguesList(mn):
+		# - cached locally until any of league or 2-week of last check expires.
+		#Probably not necessary - laded in UI stays to close app and rare use…
+		host, request = 'api.pathofexile.com', '/leagues?type=main'
+		jsonLeagues = mn.apiJSON(host, request)
 		if not(jsonLeagues):
 			return []
+		mn._p("Got leagues Info…\n")
 		lsLeague = []
 		for idx, league in enumerate(jsonLeagues):
 			mn._d("ID: „%s”, Desc: „%s”\n" % (str(league['id']), str(league['description'])))
@@ -103,6 +117,42 @@ class mySinker:
 			mn._d("  Delving allowed?: %s\n" % _y(league['delveEvent']))
 			lsLeague.append(str(league['id']))
 		return lsLeague
+
+	def appNvrsRelease(mn):
+		user, repo = 'NeverSinkDev', 'NeverSink-Filter'
+		jsonLastRelease = mn.githubJSON(user, repo)
+		if not(jsonLastRelease):
+			return None
+		sep = '-------------------------------------------------------------------------------\n'
+		mn._p(sep)
+		rel_v = str(jsonLastRelease['tag_name'])
+		txtO = "Latest Neversink release(tag: %s): „%s”\n" % (rel_v, str(jsonLastRelease['name']))
+		txtO += "  url: %s\n" % str(jsonLastRelease['html_url'])
+		txtO += "  Created: %s\n" % str(jsonLastRelease['created_at'])
+		txtO += "  Published: %s\n" % str(jsonLastRelease['published_at'])
+		txt1 = '  Description:\n'
+		for desc_line in str(jsonLastRelease['body']).splitlines():
+			ln = desc_line.strip()
+			if ln:
+				txt1 += "    %s\n" % ln
+		if txt1:
+			txtO += txt1.join((sep,)*2)
+		zip_fn = "%s-%s.zip" % (repo, rel_v)
+		tar_gz_fn = "%s-%s.tar.gz" % (repo, rel_v)
+		#txtO += "  Zip to download: %s → %s\n" % (str(jsonLastRelease['zipball_url']), zip_fn)
+		#txtO += "  Tar to download: %s → %s\n" % (str(jsonLastRelease['tarball_url']), tar_gz_fn)
+		#https://api.github.com/repos/NeverSinkDev/NeverSink-Filter/zipball/6.7
+		#   ↓
+		#https://github.com/NeverSinkDev/NeverSink-Filter/archive/6.7.zip
+		frnd_url_base = "https://github.com/NeverSinkDev/NeverSink-Filter/archive/%s" % rel_v
+		txtO += "  Friendly Zip download: %s.zip → %s\n" % (frnd_url_base, zip_fn)
+		txtO += "  Friendly Tar download: %s.tar.gz → %s\n" % (frnd_url_base, tar_gz_fn)
+		mn._p(txtO)
+		if zip_fn==ph.basename(mn.cfg['Main']['ZipFN']):
+			mn._p('Seems that you have proper zip file downloaded already.\n')
+		else:
+			mn._p('Seems that you need to download proper zip file.\n')
+		mn._p('\n')
 
 	def appUpdateFilename(mn, select, bUpEmptyTxt=True):
 		trans = cfgFiles(select)

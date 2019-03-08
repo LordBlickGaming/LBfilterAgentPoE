@@ -243,7 +243,9 @@ class mySinker_UI:
 			setattr(ui, 'buttonFileName' + select, bt)
 
 
-		ui.buttonUnZip = wg.Butt(None, mfm, 0, 0, 30, fileImage=ph.join(ph.dirname(ph.abspath(__file__)), 'ico/package.svg')) #"Proceed..."
+		ui.buttonLastRel = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_DIALOG_QUESTION)
+		ui.buttonLastRel.set_tooltip_text('Check latest Release')
+		ui.buttonUnZip = wg.Butt(None, mfm, 0, 0, 30, fileImage=ph.join(ph.dirname(ph.abspath(__file__)), 'ico/package.svg'))
 		ui.buttonConvert = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_CONVERT) #"Proceed..."
 		ui.buttonDiff = wg.Butt("Diff", mfm, 0,  0, 50)
 
@@ -307,10 +309,11 @@ class mySinker_UI:
 				bt = getattr(ui, 'buttonFileName' + select)
 				mfm.move(bt, w-45, y)
 				y += wg.Height+5
-			mfm.move(ui.buttonUnZip, 0, y)
-			mfm.move(ui.buttonConvert, 35, y)
-			mfm.move(ui.buttonDiff, 70, y)
-			mfm.move(ui.chkDbg, 125, y)
+			mfm.move(ui.buttonLastRel, 0, y)
+			mfm.move(ui.buttonUnZip, 35, y)
+			mfm.move(ui.buttonConvert, 70, y)
+			mfm.move(ui.buttonDiff, 105, y)
+			mfm.move(ui.chkDbg, 160, y)
 			mfm.move(ui.buttonPreferences, w-270, y)
 			mfm.move(ui.toggWrap, w-225, y)
 			mfm.move(ui.buttonClear, w-150, y)
