@@ -205,7 +205,7 @@ class mySinker:
 				mn.appUpdateFilenames()
 		mn.appUpdateFilename(select)
 
-	def badZip(mn):
+	def badZip(mn, zip_fn):
 			mn._p("Error: Selected zip file „", 'tgErr')
 			mn._p(hh(zip_fn), 'tgFileName')
 			mn._p("” can not be recognized!\n", 'tgErr')
@@ -226,7 +226,7 @@ class mySinker:
 			filter_name, _, ver = nm_dt
 			return filter_name, ver, root_in_zip_dn
 		else:
-			mn.badZip()
+			mn.badZip(zip_fn)
 			return None
 
 	def appUpdateFilenames(mn):
