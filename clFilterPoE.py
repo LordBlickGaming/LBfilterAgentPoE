@@ -482,7 +482,7 @@ class Rule():
 			it._p("%s" % it.sectName, 'tgPhrase')
 			it._p("” and subsection „", 'tgErr')
 			it._p("%s" % it.ssectId, 'tgPhrase')
-			it._p("” - probably NeverSink has changed this…\n", 'tgErr')
+			it._p("” - probably changed…\n", 'tgErr')
 
 	def srch_in_headlines(it, txt):
 		for line in it.headlines:
@@ -579,7 +579,7 @@ class Element(xlist):
 			it._p("%s" % txt, 'tgPhrase')
 			it._p(" in section „", 'tgErr')
 			it._p("%s" % sectName, 'tgPhrase')
-			it._p("” - probably NeverSink has changed this…\n", 'tgErr')
+			it._p("” - probably changed…\n", 'tgErr')
 		return tuple(results)
 
 	def srch_rule_comments(it, txt, noMatchErr=False, level=0):
@@ -600,7 +600,7 @@ class Element(xlist):
 			it._p("%s" % txt, 'tgPhrase')
 			it._p(" in section „", 'tgErr')
 			it._p("%s" % sectName, 'tgPhrase')
-			it._p("” - probably NeverSink has changed this…\n", 'tgErr')
+			it._p("” - probably changed…\n", 'tgErr')
 		return tuple(results)
 
 class Division(Element):
