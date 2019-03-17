@@ -482,7 +482,7 @@ class Rule():
 			it._p("%s" % it.sectName, 'tgPhrase')
 			it._p("” and subsection „", 'tgErr')
 			it._p("%s" % it.ssectId, 'tgPhrase')
-			it._p("” - It's possible that NeverSink changed it…\n", 'tgErr')
+			it._p("” - probably NeverSink has changed this…\n", 'tgErr')
 
 	def srch_in_headlines(it, txt):
 		for line in it.headlines:
@@ -579,7 +579,7 @@ class Element(xlist):
 			it._p("%s" % txt, 'tgPhrase')
 			it._p(" in section „", 'tgErr')
 			it._p("%s" % sectName, 'tgPhrase')
-			it._p("” - It's possible that NeverSink changed it…\n", 'tgErr')
+			it._p("” - probably NeverSink has changed this…\n", 'tgErr')
 		return tuple(results)
 
 	def srch_rule_comments(it, txt, noMatchErr=False, level=0):
@@ -600,7 +600,7 @@ class Element(xlist):
 			it._p("%s" % txt, 'tgPhrase')
 			it._p(" in section „", 'tgErr')
 			it._p("%s" % sectName, 'tgPhrase')
-			it._p("” - It's possible that NeverSink changed it…\n", 'tgErr')
+			it._p("” - probably NeverSink has changed this…\n", 'tgErr')
 		return tuple(results)
 
 class Division(Element):
@@ -871,20 +871,52 @@ class nvrsnkSections(Element):
 		hFile.close()
 		it.fnStore = fnStore
 
+	def getSectionByName(it, name):
+		for sect in it:
+			if sect.name==name:
+				return sect
+		it._p("Check section name „", 'tgErr')
+		it._p("%s" % name, 'tgPhrase')
+		it._p("” - probably removed…\n", 'tgErr')
+		return None
+
 	def getSectionById(it, Id, checkName=''):
-		for idx, sect in enumerate(it):
+		for sect in it:
 			if sect.Id==Id:
-				sect = it[idx]
 				if checkName:
 					if sect.name==checkName:
 						return sect
 				else:
 					return sect
+		if checkName:
+			sect = it.getSectionByName(checkName)
+			if sect:
+				it._p("Section with name „", 'tgWarn')
+				it._p("%s" % checkName, 'tgPhrase')
+				it._p("” has section Id ", 'tgWarn')
+				it._p("%d"% sect.Id, 'tgEnum')
+				it._p(" different than expected ", 'tgWarn')
+				it._p("%d" % Id, 'tgEnum')
+				it._p(" - probably changed…\n", 'tgWarn')
+				return sect
 		it._p("Check section Id ", 'tgErr')
 		it._p("%d"% Id, 'tgEnum')
-		it._p(" with name „", 'tgErr')
-		it._p("%s" % checkName, 'tgPhrase')
-		it._p("” - It's possible that NeverSink changed it…\n", 'tgErr')
+		if checkName:
+			it._p(" with name „", 'tgErr')
+			it._p("%s" % checkName, 'tgPhrase')
+			it._p("”", 'tgErr')
+		it._p(" - probably removed…\n", 'tgErr')
+		return None
+
+	def getSubsectionByName(it, name, verbose=True):
+		for sect in it:
+			for ssect in sect:
+				if ssect.name==name:
+					return sect.Id, ssect.Id, ssect
+		if verbose:
+			it._p("Check subsection name „", 'tgErr')
+			it._p("%s" % name, 'tgPhrase')
+			it._p("” - probably removed…\n", 'tgErr')
 		return None
 
 	def getSubsecttionById(it, sectId, ssectId, checkName=''):
@@ -897,10 +929,24 @@ class nvrsnkSections(Element):
 						return ssect
 				else:
 					return ssect
-		it._p("Check subsection Id ", 'tgErr')
-		it._p("%d"% ssectId, 'tgEnum')
-		it._p(" with name „", 'tgErr')
-		it._p("%s" % checkName, 'tgPhrase')
-		it._p("” - It's possible that NeverSink changed it…\n", 'tgErr')
+			if checkName:
+				tst = it.getSubsectionByName(checkName, verbose=False)
+				if tst and(type(tst)==tuple) and(len(tst)==3):
+					sectId_n, ssectId_n, ssect = tst
+					it._p("Subsection with name „", 'tgWarn')
+					it._p("%s" % checkName, 'tgPhrase')
+					it._p("” SectionId/subsectionId:", 'tgWarn')
+					it._p("%d/%d" % (sectId_n, ssectId_n), 'tgEnum')
+					it._p(" is different than expected:", 'tgWarn')
+					it._p("%d/%d" % (sectId, ssectId), 'tgEnum')
+					it._p(" - probably changed…\n", 'tgWarn')
+					return ssect
+		it._p("Check section/subsection Id ", 'tgErr')
+		it._p("%d/%d" % (sectId, ssectId), 'tgEnum')
+		if checkName:
+			it._p(" with name „", 'tgErr')
+			it._p("%s" % checkName, 'tgPhrase')
+			it._p("”", 'tgErr')
+		it._p(" - probably removed…\n", 'tgErr')
 		return None
 
