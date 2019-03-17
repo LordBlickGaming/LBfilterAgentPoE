@@ -111,9 +111,11 @@ class mySinker:
 			mn._d("ID: „%s”, Desc: „%s”\n" % (str(league['id']), str(league['description'])))
 			mn._d("  Start: %s\n" % str(league['startAt']))
 			mn._d("  Ends: %s\n" % str(league['endAt']))
-			mn._d("  Registerable from: %s\n" % str(league['registerAt']))
+			if 'registerAt' in league.keys():
+				mn._d("  Registerable from: %s\n" % str(league['registerAt']))
 			mn._d("  Ladder: %s\n" % str(league['url']))
-			mn._d("  Is It Event?: %s\n" % _y(league['event']))
+			if 'event' in league.keys():
+				mn._d("  Is It Event?: %s\n" % _y(league['event']))
 			mn._d("  Delving allowed?: %s\n" % _y(league['delveEvent']))
 			lsLeague.append(str(league['id']))
 		return lsLeague
@@ -312,7 +314,7 @@ class mySinker:
 			acquired = newRule.load(linesRule)
 			sect[0][0].insert(1, newRule)
 		#manipulate chisel recipe
-		ssect = inFS.getSubsecttionById(700, 717, "Chisel recipe items")
+		ssect = inFS.getSubsecttionById(800, 817, "Chisel recipe items")
 		if ssect:
 			rules = ssect[0]
 			if len(rules):
@@ -324,7 +326,7 @@ class mySinker:
 					elif q==None:
 						rule.Conditions['Quality'] = (True, ('>=', '5'), 0, '')
 		#lower Font Size
-		sect = inFS.getSectionById(900, "Currency - PART 1 - Common currency")
+		sect = inFS.getSectionById(1000, "Currency - PART 1 - Common currency")
 		if sect:
 			rules = sect.srch_rule_basetype("Silver Coin", True)
 			for rule in rules:
@@ -355,13 +357,13 @@ class mySinker:
 				rule.tuneFontSize(40, 32, False)
 				rule.tuneFontSize(45, 35, False)
 		#
-		sect = inFS.getSectionById(1600, "UTILITY FLASKS (Levelling Rules)")
+		sect = inFS.getSectionById(1700, "UTILITY FLASKS (Levelling Rules)")
 		if sect:
 			sect.tuneFontSize(45, 36)
 			rules = sect.srch_rule_basetype("Quicksilver Flask", True)
 			for rule in rules:
 				rule.Actions.deactivate('PlayAlertSound')
-		ssect = inFS.getSubsecttionById(1800, 1808, "Sorted Map Fragments")
+		ssect = inFS.getSubsecttionById(1900, 1908, "Sorted Map Fragments")
 		if ssect:
 			for div in ssect:
 				for rule in div:
@@ -369,7 +371,7 @@ class mySinker:
 					classRow = rule.Conditions['Class']
 					if not(baseRow) and(classRow) and("Map Fragments" in classRow[1][0]):
 						rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(1800, 1809, "Scarabs")
+		ssect = inFS.getSubsecttionById(1900, 1909, "Scarabs")
 		if ssect:
 			for div in ssect:
 				for rule in div:
@@ -383,7 +385,7 @@ class mySinker:
 							rule.tuneFontSize(45, 40, True)
 						elif baseTxt=="Gilded":
 							rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(1800, 1810, "Remaining Map Fragments")
+		ssect = inFS.getSubsecttionById(1900, 1910, "Remaining Map Fragments")
 		if ssect:
 			for div in ssect:
 				for rule in div:
@@ -393,10 +395,10 @@ class mySinker:
 						classTxt = classRow[1][0].strip("\"")
 						if classTxt in ("Map Fragments", "Pantheon Soul"):
 							rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(1900, 1901, "Regular Rare Currency")
+		ssect = inFS.getSubsecttionById(2000, 2001, "Regular Rare Currency")
 		if ssect:
 			ssect.tuneFontSize(45, 40)
-		ssect = inFS.getSubsecttionById(1900, 1904, "Delve Currency - Resonators")
+		ssect = inFS.getSubsecttionById(2000, 2004, "Delve Currency - Resonators")
 		if ssect:
 			rules = ssect.srch_rule_comments("resonator $t->1", True)
 			for rule in rules:
@@ -407,7 +409,7 @@ class mySinker:
 			rules = ssect.srch_rule_comments("resonator $t->3", True)
 			for rule in rules:
 				rule.tuneFontSize(45, 38, True)
-		ssect = inFS.getSubsecttionById(1900, 1905, "Delve Currency - Fossil")
+		ssect = inFS.getSubsecttionById(2000, 2005, "Delve Currency - Fossil")
 		if ssect:
 			rules = ssect.srch_rule_comments("fossil $t->1", True)
 			for rule in rules:
@@ -422,10 +424,10 @@ class mySinker:
 			for rule in rules:
 				rule.tuneFontSize(45, 36, True)
 		# Einhar is back, but no nets tho…
-		#ssect = inFS.getSubsecttionById(1900, 1906, "Bestiary Currency")
+		#ssect = inFS.getSubsecttionById(2000, 2006, "Bestiary Currency")
 		#if ssect:
 			#ssect.erase()
-		ssect = inFS.getSubsecttionById(1900, 1907, "Essence Tier List")
+		ssect = inFS.getSubsecttionById(2000, 2007, "Essence Tier List")
 		if ssect:
 			ssect.tuneFontSize(38, 36)
 			ssect.tuneFontSize(40, 38)
@@ -433,69 +435,69 @@ class mySinker:
 			rules = ssect.srch_rule_basetype("Screaming Essence of", True)
 			for rule in rules:
 				rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(1900, 1908, "Perandus")
+		ssect = inFS.getSubsecttionById(2000, 2008, "Perandus")
 		if ssect:
 			ssect.tuneFontSize(36, 32)
 			ssect.tuneFontSize(40, 38)
 			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(1900, 1909, "Breach")
+		ssect = inFS.getSubsecttionById(2000, 2009, "Breach")
 		if ssect:
 			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(1900, 1910, "Others")
+		ssect = inFS.getSubsecttionById(2000, 2010, "Others")
 		if ssect:
 			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(2000, 2001, "Exceptions to prevent ident. mistakes")
+		ssect = inFS.getSubsecttionById(2100, 2101, "Exceptions to prevent ident. mistakes")
 		if ssect:
 			ssect.tuneFontSize(45, 38)
-		ssect = inFS.getSubsecttionById(2000, 2004, "T3 - Decent cards")
+		ssect = inFS.getSubsecttionById(2100, 2104, "T3 - Decent cards")
 		if ssect:
 			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(2000, 2008, "T4 - ...showing the remaining cards")
+		ssect = inFS.getSubsecttionById(2100, 2107, "T4 - ...showing the remaining cards")
 		if ssect:
 			ssect.tuneFontSize(45, 40)
-		ssect = inFS.getSubsecttionById(2200, 2205, "Multi-Unique bases.")
+		ssect = inFS.getSubsecttionById(2300, 2305, "Multi-Unique bases.")
 		if ssect:
 			ssect.tuneFontSize(45, 42)
 		#show highest tiers of mana/life flasks
-		ssect = inFS.getSubsecttionById(2500, 2501, "Hide outdated flasks")
+		ssect = inFS.getSubsecttionById(2600, 2601, "Hide outdated flasks")
 		if ssect:
 			rule = ssect[0][2]
 			if rule.Conditions.has_lead('BaseType') and(rule.Conditions.get_args('BaseType')[-2:]==tuple("Divine Eternal".split())):
 				rule.Conditions.replace_args('BaseType', rule.Conditions.get_args('BaseType')[:-2])
 			else:
 				print("Divine/Eternal flasks could be not showed, check rules change in 2500/2501 Otdated flask section")
-		sect = inFS.getSectionById(2600, "Leveling - Merged Rules")
+		sect = inFS.getSectionById(2700, "Leveling - Merged Rules")
 		if sect:
 			sect.tuneFontSize(42, 34)
-		ssect = inFS.getSubsecttionById(2800, 2801, "Leveling rares - specific items")
+		ssect = inFS.getSubsecttionById(2900, 2901, "Leveling rares - specific items")
 		if ssect:
 			ssect.tuneFontSize(42, 34)
 		#lower Font Size of unsorted by level 4L
-		ssect = inFS.getSubsecttionById(2900, 2901, "Linked gear - 4links")
+		ssect = inFS.getSubsecttionById(3000, 3001, "Linked gear - 4links")
 		if ssect:
 			ssect.tuneFontSize(42, 34)
 		# Linked gear - Caster Weapon Configuration
-		ssect = inFS.getSubsecttionById(2900, 2902, "Linked gear - Caster Weapon Configuration")
+		ssect = inFS.getSubsecttionById(3000, 3002, "Linked gear - Caster Weapon Configuration")
 		if ssect:
 			ssect.tuneFontSize(40, 34)
 		#lower Font Size of unsorted by level 3L
-		ssect = inFS.getSubsecttionById(2900, 2903, "Linked gear - 3links")
+		ssect = inFS.getSubsecttionById(3000, 3003, "Linked gear - 3links")
 		if ssect:
 			ssect.tuneFontSize(40, 34)
 		#summoner recipe shield
-		ssect = inFS.getSubsecttionById(2900, 2907, "Optional Recipes")
+		ssect = inFS.getSubsecttionById(3000, 3007, "Optional Recipes")
 		if ssect:
 			ssect.activate()
 		# quality, lvl, nonmf
-		ssect = inFS.getSubsecttionById(2900, 2908, "20% quality items for those strange people who want them")
+		ssect = inFS.getSubsecttionById(3000, 3008, "20% quality items for those strange people who want them")
 		if ssect:
 			ssect.activate()
 		#enable lvl, small
-		ssect = inFS.getSubsecttionById(3100, 3102, "Vendor Normal items - Until level 3 (Remaining)")
+		ssect = inFS.getSubsecttionById(3200, 3202, "Vendor Normal items - Until level 3 (Remaining)")
 		if ssect:
 			ssect.activate()
 		# show, tune font, insert rule from text
-		sect = inFS.getSectionById(3300, "HIDE LAYER 5 - Remaining Items")
+		sect = inFS.getSectionById(3400, "HIDE LAYER 5 - Remaining Items")
 		sect = False
 		if sect:
 			rule = sect[0][0][0]
