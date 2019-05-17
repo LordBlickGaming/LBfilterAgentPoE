@@ -4,7 +4,7 @@
 # -*- tabstop: 4 -*-
 
 from clIniFile import IniSections, _p, xlist, hh
-from clFilterPoE import nvrsnkSections, Rule, _d
+from clFilterPoE import nvrsnkSections, Rule, _d, _range
 from uiMySinker import wg
 from os import path as ph
 from uiMySinker import lsFiles
@@ -63,7 +63,6 @@ class mySinker:
 
 	def uiDebug(mn, check):
 		mn.dbg = bool(check.get_active())
-		#print("Debug: %s" % str(mn.dbg))
 
 	def apiJSON(mn, host, request, secure=False):
 		jsonData = None
@@ -282,6 +281,11 @@ class mySinker:
 		inFS.load(fn)
 		if not(inFS.fnLoad):
 			return
+		_d = mn._d
+		_p = mn._p
+		def tfs(slice_, old, new, noMatchErr=False):
+				for rule in slice_:
+					rule.tuneFontSize(old, new, noMatchErr)
 		############################################################################################################################################
 		#Oni-Goroshi Farm
 		sect = inFS.getSectionById(100, "OVERRIDE AREA 1 - Override ALL rules here")
@@ -319,10 +323,10 @@ class mySinker:
 			rules = ssect[0]
 			if len(rules):
 				for rule in rules:
-					q = rule.get_condition_args('Quality_Hi')
-					r = rule.get_condition_args('Rarity_Hi')#[0]
+					q = rule.get_cond_args('Quality_Hi')
+					r = rule.get_cond_args('Rarity_Hi')#[0]
 					if q==('>', '11') and(r) and(r[0]=='Magic'):
-						rule.deactivate()
+						rule.replace_cond_args('Quality_Hi', ('>', '17'))
 					elif q==None:
 						rule.Conditions['Quality'] = (True, ('>=', '5'), 0, '')
 		#lower Font Size
@@ -378,7 +382,6 @@ class mySinker:
 					baseRow = rule.Conditions['BaseType']
 					if baseRow:
 						baseTxt = baseRow[1][0].strip("\"")
-						#print(">%s<" % baseTxt)
 						if baseTxt=="Rusted":
 							rule.tuneFontSize(45, 38, True)
 						elif baseTxt=="Polished":
@@ -462,28 +465,62 @@ class mySinker:
 		ssect = inFS.getSubsecttionById(2600, 2601, "Hide outdated flasks")
 		if ssect:
 			rule = ssect[0][2]
-			if rule.Conditions.has_lead('BaseType') and(rule.Conditions.get_args('BaseType')[-2:]==tuple("Divine Eternal".split())):
-				rule.Conditions.replace_args('BaseType', rule.Conditions.get_args('BaseType')[:-2])
+			ruleBase = rule.get_cond_args('BaseType')
+			if ruleBase[-2:]==tuple("Divine Eternal".split()):
+				rule.replace_cond_args('BaseType', ruleBase[:-2])
 			else:
 				print("Divine/Eternal flasks could be not showed, check rules change in 2500/2501 Otdated flask section")
 		sect = inFS.getSectionById(2700, "Leveling - Merged Rules")
 		if sect:
 			sect.tuneFontSize(42, 34)
+		sect_nm = "Leveling - RGB Recipes"
+		sect = inFS.getSectionById(2800, sect_nm)
+		if sect:
+			div = sect[0][0]
+			for rule in div[0:2]:
+				rule.tuneFontSize(45, 40)
+			for rule in div[2:4]:
+				rule.tuneFontSize(36, 32)
+			w = div[1].get_cond_args('Width_Hi')
+			if w==('<=', '1'):
+				div[1].replace_cond_args('Width_Hi', ('1',))
+			#div[2].new_cond_args('ItemLevel_Hi', ('<=', '67'), 38, 'No respect for huge chromatic orb on maps')
+			#due to strange bug plague, „ItemLevel” condition does not accept commentary hash
+			div[2].new_cond_args('ItemLevel_Hi', ('<=', '67'), 38, None)
+		#
 		ssect = inFS.getSubsecttionById(2900, 2901, "Leveling rares - specific items")
 		if ssect:
-			ssect.tuneFontSize(42, 34)
+			ssect.tuneFontSize(45, 34, True)
+		#
+		for idx in (2902, 2903):
+			ssect = inFS.getSubsecttionById(2900, idx, "Leveling rares - Progression - First Levels")
+			if ssect:
+				ssect.tuneFontSize(45, 36, True)
+		ssect = inFS.getSubsecttionById(2900, 2904, "Leveling rares - Progression - First Levels")
+		if ssect:
+			div = ssect[0]
+			tfs(div[:2], 45, 36, True)
+			tfs(div[2:], 36, 32, True)
 		#lower Font Size of unsorted by level 4L
 		ssect = inFS.getSubsecttionById(3000, 3001, "Linked gear - 4links")
 		if ssect:
-			ssect.tuneFontSize(42, 34)
+			ssect.tuneFontSize(45, 36, True)
 		# Linked gear - Caster Weapon Configuration
 		ssect = inFS.getSubsecttionById(3000, 3002, "Linked gear - Caster Weapon Configuration")
 		if ssect:
-			ssect.tuneFontSize(40, 34)
+			ssect.tuneFontSize(40, 34, True)
 		#lower Font Size of unsorted by level 3L
 		ssect = inFS.getSubsecttionById(3000, 3003, "Linked gear - 3links")
 		if ssect:
-			ssect.tuneFontSize(40, 34)
+			div = ssect[0]
+			tfs(div[:2], 40, 34, True)
+			div[2].tuneFontSize(36, 32, True)
+		ssect = inFS.getSubsecttionById(3000, 3004, "Util end Act1")
+		if ssect:
+			div = ssect[0]
+			tfs(div[3:], 36, 32, True)
+			div[3].tuneFontSize(40, 34, True)
+			tfs(div[:3], 45, 36, True)
 		#summoner recipe shield
 		ssect = inFS.getSubsecttionById(3000, 3007, "Optional Recipes")
 		if ssect:
@@ -502,7 +539,7 @@ class mySinker:
 		if sect:
 			rule = sect[0][0][0]
 			rule.Appear = 'Show'
-			rule.tuneFontSize(26, 20)
+			rule.tuneFontSize(26, 20, True)
 			txtRule = '\nShow # essence alchemy base for chaos recipe\nClass "Rings" "Amulet" "Belts" "Gloves" "Boots" "Helmets"\n'
 			txtRule += 'Rarity Normal\nItemLevel >= 60\nSetFontSize 25\nSetTextColor 255 255 255\n'
 			txtRule += 'SetBorderColor 0 150 0 190\nSetBackgroundColor 20 70 30 128\n\n'
@@ -515,8 +552,8 @@ class mySinker:
 			for ssect in sect:
 				for div in ssect:
 					for rule in div:
-						if rule.Conditions.has_lead('LinkedSockets_Hi') and(rule.Conditions.get_args('LinkedSockets_Hi')[-1]=='4'):
-							rule.Actions.deactivate('PlayAlertSound')
+						if rule.get_cond_args('LinkedSockets_Hi')[-1]=='4':
+							rule.Actions.del_cmd('PlayAlertSound')
 		############################################################################################################################################
 		inFS.store(mn.cfg['Main']['OutFN'])
 
@@ -526,7 +563,6 @@ class mySinker:
 		from time import sleep
 		if echo:
 			mn._p("> %s\n" % cmd)
-			#print(tuple(shsp(cmd)))
 		if out:
 			fd_out = open(out, "w")
 			fd_out.flush()

@@ -29,6 +29,7 @@ _range = lambda _min, _max: tuple(range(_min, _max+1))
 in_range = lambda _val, _min, _max: _val in _range(_min, _max)
 _byte = _range(0, 255)
 _byte = _range(0, 255)
+_range100 = _range(1, 100)
 _nan_byte = (None,)+_byte # not always needed
 _ef_colors =  'Red Green Blue Brown White Yellow'.split
 _ef_shapes = 'Circle Diamond Hexagon Square Star Triangle'.split
@@ -54,9 +55,9 @@ conditions = (
 	("MapTier",          cond_compare_or_space, (1, 20)),
 	("Width",            cond_compare_or_space, (1, 2)),
 	("Height",           cond_compare_or_space, _range(1, 4)),
-	("Quality",          cond_compare_or_space, _range(1, 30)),
-	("ItemLevel",        cond_compare_or_space, _range(1, 100)),
-	("DropLevel",        cond_compare_or_space, _range(1, 100)),
+	("Quality",          cond_compare_or_space, _range100),
+	("ItemLevel",        cond_compare_or_space, _range100),
+	("DropLevel",        cond_compare_or_space, _range100),
 	("Rarity",           cond_compare_or_space, dcRarity),
 	("Class",            cond_list),
 	("ElderMap",         cond_bool),
@@ -83,10 +84,10 @@ actions = (
 	("SetBorderColor", _byte, _byte, _byte, _nan_byte),
 	("SetBackgroundColor", _byte, _byte, _byte, _nan_byte),
 	#						Choice			Volume
-	("PlayAlertSound", _range(1, 16), _range(0, 300)),
 	("DisableDropSound",),
-	("MinimapIcon", _range(0, 2), _ef_colors, _ef_shapes),
+	("PlayAlertSound", _range(1, 16), _range(0, 300)),
 	('PlayEffect', _ef_colors, _ef_temp),
+	("MinimapIcon", _range(0, 2), _ef_colors, _ef_shapes),
 	)
 actn_raw = tuple(map(lambda n: n[0], actions))
 which_action = lambda txt: actn_raw.index(txt)+1 if txt in actn_raw else 0
@@ -94,6 +95,46 @@ reAciton = re.compile(
 	r"^\s*(?P<inactive>#?)\s*(?P<action>(?:"\
 	+r')|(?:'.join(actn_raw)\
 	+r"))(?P<txtArgs>[^#]*)(?P<comment>#.*)?$", re.U)
+
+class None_Type(type):
+	name = 'None_'
+	def __new__(it):
+		return type.__new__(it, it.name, (type,), {})
+
+	def __init__(it):
+		super(None_Type, it).__init__(it.name, (type,), {})
+
+	def __str__(it):
+		return ''
+
+	def __repr__(it):
+		return it.name
+
+	def __nonzero__(it):
+		return False
+
+	def __bool__(it):
+		return False
+
+	def __len__(it):
+		return 0
+
+	def __call__(it, *args, **kwargs):
+		return None
+
+	def __contains__(it, item):
+		return False
+
+	def __getitem__(it, item):
+		return None
+
+	def __iter__(it):
+		return it
+
+	def next(*args):
+		raise StopIteration
+
+None_ = None_Type()
 
 class rulePrims(xlist):
 	'''
@@ -117,7 +158,17 @@ class rulePrims(xlist):
 				it.append((command+'_M', lm))
 			else:
 				it.append((command, None))
-		it.keys =  tuple(map(lambda (key, value): key, it))
+		it.keys = tuple(map(lambda (key, value): key, it))
+
+	def reset_command(it, command):
+		name = it.name
+		if name == "Condition" and(it.getCondType(command)==cond_compare_or_space):
+			it[command+'_Hi'] = None
+			it[command+'_Lo'] = None
+		elif name == "Condition" and(it.getCondType(command)==cond_list_multi):
+			it[command+'_M'] = xlist()
+		else:
+			it[command] = None
 
 	has_key = lambda it, key: key in it.keys
 	get_place = lambda it, key: it.keys.index(key)
@@ -127,8 +178,9 @@ class rulePrims(xlist):
 			return xlist.__getitem__(it, key)[1] # [0] is key…
 		if it.has_key(key):
 			return xlist.__getitem__(it, it.get_place(key))[1] # [0] is key…
-		else:
-			return None
+		if it.has_key(key+'_M'):
+			return xlist.__getitem__(it, it.get_place(key+'_M'))[1] # [0] is key…
+		return None
 
 	def __setkey(it, key, value):
 		idx = it.get_place(key)
@@ -143,7 +195,7 @@ class rulePrims(xlist):
 		elif it.has_key(key):
 			idx = it.get_place(key)
 			if it[idx] and(it.bWarning):
-				print(it[idx], str(it.bWarning))
+				#print(it[idx], str(it.bWarning))
 				it._d('\n')
 				it._p("     Warning! Ugly overwriting %s „%s” during Data Work Status: >%s<:\n" % (it.name, key, Data_pass), 'tgWarn')
 				it._p("        (%s)\n" % (', '.join(map(lambda x: str(x), it[idx]))), 'tgPhrase')
@@ -218,11 +270,11 @@ class rulePrims(xlist):
 
 	def get_lead(it, command, lead):
 		if not(it.has_lead(command)) or lead not in it.leads:
-			return -1
+			return None_
 		idx = it.leads.index(lead)
 		return it[command][idx]
 
-	def set_lead(it, command, lead, value):
+	def mod_lead(it, command, lead, value, new=False):
 		if not(it.has_lead(command)) or lead not in it.leads:
 			return False
 		idx = it.leads.index(lead)
@@ -234,30 +286,48 @@ class rulePrims(xlist):
 			leading_right = ()
 		else:
 			leading_right = it[command][idx+1:]
-		it[command] = leading_left + (value, ) + leading_right
-		if len(it[command])!=4:
-			it._p("Got trouble with set_lead !\n\tleft:", 'tgErr')
+		tmp_command = leading_left + (value, ) + leading_right
+		if len(tmp_command)!=4:
+			it._p("Got trouble with mod_lead !\n\tleft:", 'tgErr')
 			it._p(("%s" % str(leading_left)), 'tgPhrase')
 			it._p("\n\tright:", 'tgErr')
 			it._p((" %s\n" % str(leading_right)), 'tgPhrase')
+			return False
+		it[command] = tmp_command
 		return True
 
-	get_args = lambda it, command: it.get_lead(command, 'args')
-	set_args = lambda it, command, arg_tuple: it.set_lead(command, 'args', arg_tuple) #need tuple check…
+	get_args = lambda it, command: it.get_lead(command, 'args')#Error catching in get_lead
+
+	def set_args(it, command, arg_tuple):
+		if type(arg_tuple) is tuple:
+			return it.mod_lead(command, 'args', arg_tuple)
+		return False
 
 	def replace_args(it, command, arg_tuple):
 		it.bWarning = False
 		it.set_args(command, arg_tuple)
 		it.bWarning = True
 
+	def new_args(it, command, arg_tuple, spc=0, comment=''):
+		if not(it.has_key(command)):
+			return False
+		it[command] = (True, arg_tuple, spc, comment)
+		it.activate(command)
+		return True
+
+	def del_cmd(it, command):
+		it.bWarning = False
+		it.reset_command(command)
+		it.bWarning = True
+
 	def activate(it, key):
 		it.bWarning = False
-		it.set_lead(key, 'activity', True)
+		it.mod_lead(key, 'activity', True)
 		it.bWarning = True
 
 	def deactivate(it, key):
 		it.bWarning = False
-		it.set_lead(key, 'activity', False)
+		it.mod_lead(key, 'activity', False)
 		it.bWarning = True
 
 	def _st_ln(it, command, activity, args, comment_spc, comment):
@@ -454,50 +524,17 @@ class Rule():
 		for aciion_key in it.Actions.keys:
 			it.Actions.deactivate(aciion_key)
 
-	def setColor(it, actionColor, _r, _g, _b, _a=-1):
-		if not(it.Actions.has_lead(actionColor)):
-			return
-		bActive, args, comment_spc, comment = it.Actions[actionColor]
-		if len(args) not in(3, 4):
-			return
-		_args = ( _r, _g, _b) if  _a<0 else ( _r, _g, _b, _a)
-		it.Actions.bWarning = False
-		it.Actions[actionColor] = bActive, tuple(map(lambda x: str(x), _args)), comment_spc, comment
-		it.Actions.bWarning = True
-
-	def tuneFontSize(it, old, new, noMatchErr=False):
-		rowFontSize = it.Actions['SetFontSize']
-		if rowFontSize: #can be None
-			bActive, args, comment_spc, comment = rowFontSize
-			txtFontSize = args[0]
-			if txtFontSize.isdigit() and(int(txtFontSize)==old):
-				it.Actions.bWarning = False
-				it.Actions['SetFontSize'] = bActive, (str(new), ), comment_spc, comment
-				it.Actions.bWarning = True
-				return
-		if noMatchErr:
-			it._p("No match search font size ", 'tgErr')
-			it._p("%d"% old, 'tgEnum')
-			it._p(" in section „", 'tgErr')
-			it._p("%s" % it.sectName, 'tgPhrase')
-			it._p("” and subsection „", 'tgErr')
-			it._p("%s" % it.ssectId, 'tgPhrase')
-			it._p("” - probably changed…\n", 'tgErr')
+	get_cond_args = lambda it, txt: it.Conditions.get_args(txt)
+	replace_cond_args = lambda it, txt, arg_tuple: it.Conditions.replace_args(txt, arg_tuple)
+	new_cond_args = lambda it, txt, arg_tuple, spc=0, comment='': it.Conditions.new_args(txt, arg_tuple, spc, comment)
+	get_act_args = lambda it, txt: it.Actions.get_args(txt)
+	replace_act_args = lambda it, txt, arg_tuple: it.Actions.replace_args(txt, arg_tuple)
 
 	def srch_in_headlines(it, txt):
 		for line in it.headlines:
 			if txt in line:
 				return True
 		return False
-
-	def get_condition_args(it, txt):
-		row = it.Conditions[txt]
-		print(txt, '→', row)
-		if row and(len(row)==4):
-			_, args, _, _ = row
-			return args
-		else:
-			return None
 
 	def srch_rule_comments(it, txt, noMatchErr=None, level=-1):
 		if txt in it.comment:
@@ -509,13 +546,52 @@ class Rule():
 		return None
 
 	def srch_rule_basetype(it, txt, noMatchErr=None, level=-1):
-		baseRow = it.Conditions['BaseType']
-		if baseRow and(len(baseRow)==4):
-			_, args, _, _ = baseRow
+		args = it.get_cond_args('BaseType')
+		if args:
 			for arg in args:
 				if txt in arg:
 					return (it, )
 		return None
+
+	def setColor(it, actionColor, _r, _g, _b, _a=-1):
+		if not(it.Actions.has_lead(actionColor)):
+			return
+		bActive, args, comment_spc, comment = it.Actions[actionColor]
+		if len(args) not in(3, 4):
+			return
+		_args = ( _r, _g, _b) if  _a<0 else ( _r, _g, _b, _a)
+		it.Actions.bWarning = False
+		it.Actions[actionColor] = bActive, tuple(map(lambda x: str(x), _args)), comment_spc, comment
+		it.Actions.bWarning = True
+
+	def getFontSize(it):
+		rowFontSize = it.Actions['SetFontSize']
+		if rowFontSize: #can be None
+			_, args, _, _ = rowFontSize
+			txtFontSize = args[0]
+			if txtFontSize.isdigit():
+				return int(txtFontSize)
+		return None
+
+	def tuneFontSize(it, old, new, noMatchErr=False):
+		rowFontSize = it.Actions['SetFontSize']
+		if rowFontSize: #can be None
+			bActive, args, comment_spc, comment = rowFontSize
+			txtFontSize = args[0]
+			if txtFontSize.isdigit() and(int(txtFontSize)==old):
+				it.Actions.bWarning = False
+				it.Actions['SetFontSize'] = bActive, (str(new), ), comment_spc, comment
+				it.Actions.bWarning = True
+				return True
+		if noMatchErr:
+			it._p("No match search font size ", 'tgErr')
+			it._p("%d"% old, 'tgEnum')
+			it._p(" in section „", 'tgErr')
+			it._p("%s" % it.sectName, 'tgPhrase')
+			it._p("” and subsection „", 'tgErr')
+			it._p("%s" % it.ssectId, 'tgPhrase')
+			it._p("” - probably changed…\n", 'tgErr')
+		return False
 
 class Element(xlist):
 	def __init__(it, logger, debug=True):
@@ -544,7 +620,7 @@ class Element(xlist):
 
 	def tuneFontSize(it, old, new, noMatchErr=False):
 		for child in it:
-			child.tuneFontSize(old, new, noMatchErr=False)
+			child.tuneFontSize(old, new, noMatchErr)
 
 	def activate(it):
 		for child in it:
@@ -893,7 +969,7 @@ class nvrsnkSections(Element):
 			if sect:
 				it._p("Section with name „", 'tgWarn')
 				it._p("%s" % checkName, 'tgPhrase')
-				it._p("” has section Id ", 'tgWarn')
+				it._p("” has SectionId:", 'tgWarn')
 				it._p("%d"% sect.Id, 'tgEnum')
 				it._p(" different than expected ", 'tgWarn')
 				it._p("%d" % Id, 'tgEnum')
@@ -935,7 +1011,7 @@ class nvrsnkSections(Element):
 					sectId_n, ssectId_n, ssect = tst
 					it._p("Subsection with name „", 'tgWarn')
 					it._p("%s" % checkName, 'tgPhrase')
-					it._p("” SectionId/subsectionId:", 'tgWarn')
+					it._p("” SectionId/SubsectionId:", 'tgWarn')
 					it._p("%d/%d" % (sectId_n, ssectId_n), 'tgEnum')
 					it._p(" is different than expected:", 'tgWarn')
 					it._p("%d/%d" % (sectId, ssectId), 'tgEnum')
