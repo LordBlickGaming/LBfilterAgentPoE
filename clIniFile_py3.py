@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # -*- coding: utf-8 -*-
 # -*- tabstop: 4 -*-
@@ -34,7 +34,7 @@ _p = lambda _str, tag=None: sto.write(hh(str(_str)))
 
 dbg = False
 
-def _dbg(_str):
+def _d(_str):
 	if dbg: sto.write(str(_str))
 
 class xlist(list):
@@ -54,10 +54,86 @@ class xlist(list):
 	copy = lambda it: xlist((lst_el.copy() if hasattr(lst_el, 'copy') else lst_el.__class__(lst_el) for lst_el in it))
 
 
-class Section(xlist):
+class exlist(xlist):
 	def __init__(it):
 		xlist.__init__(it)
+
+	def get_place(it, key):
+		names = it.keys()
+		if key in names:
+			return names.index(key)
+		return None
+
+	def __getitem__(it, key):
+		if type(key) is int:
+			return xlist.__getitem__(it, key)
+		elif it.has_key(key):
+			return xlist.__getitem__(it, it.get_place(key))[1]
+		else:
+			return None
+
+	def get(it, key, default=None):
+		ret = it.__getitem__(key)
+		if ret is not None:
+			return ret
+		elif default is not None:
+			it[key] = default
+			return default
+		return None
+
+	def __setitem__(it, key, value):
+		if type(key) is int:
+			xlist.__setitem__(it, key, value)
+			return
+		else:
+			idx = it.get_place(key)
+			if idx is not None:
+				it[idx] = key, value
+				return
+			else:
+				it.append( (key, value) )
+
+	dump_name = lambda it: "%s\n" % it.name
+	has_key = lambda it, key: key in it.keys()
+	items = lambda it: it.copy()
+	keys = lambda it: xlist(map(lambda kv: kv[0], it))
+	values = lambda it: xlist(map(lambda kv: kv[1], it))
+
+	def place(it, name, value, index=None):
+		if type(index) is int and(index<len(it)):
+			old_idx = it.get_place(name)
+			if old_idx is not None:
+				cut_section = it.pop(old_idx)
+				if index<len(it):
+					it.insert(index, cut_section) # Nevermind value, it will be replaced at the end
+		it[name] = value
+
+	def remove(it, name):
+		idx = it.get_place(name)
+		if idx is None:
+			return
+		it.pop(idx)
+
+class Section(exlist):
+	def __init__(it):
+		exlist.__init__(it)
 		it.name = ''
+
+	def __setitem__(it, key, value):
+		if type(key) is int:
+			xlist.__setitem__(it, key, value)
+			return
+		else:
+			idx = it.get_place(key)
+			if idx is not None:
+				it[idx] = key, value
+				return
+			idx = it.get_commented_place(key)
+			if idx is not None:
+				it[idx] = key, value
+				return
+			else:
+				it.append( (key, value) )
 
 	def load(it, lines):
 		head = lines[0]
@@ -76,8 +152,8 @@ class Section(xlist):
 			elif (line[0], line[-1])==('[', ']') or(idx==ln_max):
 				return idx
 			elif '=' in line:
-				key_, value = line.split('=', 1)
-				it[key_.strip()] = value.lstrip()
+				key, value = line.split('=', 1)
+				it[key.strip()] = value.lstrip()
 				idx += 1
 			elif line.strip().startswith(';'): # comment
 				it.append( (None, line) )
@@ -90,74 +166,21 @@ class Section(xlist):
 			if idx==ln_max:
 				return idx # end of file
 
-	def get_place(it, key_):
-		names = it.keys()
-		if key_ in names:
-			return names.index(key_)
+	def get_commented_place(it, key):
+		names = map(lambda kv: kv[0].lstrip(';'), it)
+		if key in names:
+			return names.index(key)
 		return None
 
-	def get_commented_place(it, key_):
-		names = map(lambda (key_, value): key_.lstrip(';'), it)
-		if key_ in names:
-			return names.index(key_)
-		return None
-
-	def __getitem__(it, key_):
-		if type(key_) is int:
-			return xlist.__getitem__(it, key_)
-		elif it.has_key(key_):
-			return xlist.__getitem__(it, it.get_place(key_))[1]
-		else:
-			return None
-
-	get = __getitem__
-
-	def __setitem__(it, key_, value):
-		if type(key_) is int:
-			xlist.__setitem__(it, key_, value)
-			return
-		else:
-			idx = it.get_place(key_)
-			if idx is not None:
-				it[idx] = key_, value
-				return
-			idx = it.get_commented_place(key_)
-			if idx is not None:
-				it[idx] = key_, value
-				return
-			else:
-				it.append( (key_, value) )
-
-	dump_name = lambda it: "%s\n" % it.name
-	has_key = lambda it, key_: key_ in it.keys()
-	items = lambda it: it.copy()
-	keys = lambda it: xlist(map(lambda (key_, value): key_, it))
-	values = lambda it: xlist(map(lambda (key_, value): value, it))
-
-	def place(it, name, value, index=None):
-		if type(index) is int and(index<len(it)):
-			old_idx = it.get_place(name)
-			if old_idx is not None:
-				cut_section = it.pop(old_idx)
-				if index<len(it):
-					it.insert(index, cut_section) # Nevermind value, it will be replaced at the end
-		it[name] = value
-
-	def remove(it, name):
-		idx = it.get_place(name)
+	def deactivate(it, key):
+		if type(key) is int:
+			if key>=len(it):
+				raise IndexError( "index '%i' out of range'0 - %i'" % (key, len(it)-1))
+			key = it[key][0]
+		idx = it.get_place(key)
 		if idx is None:
 			return
-		it.pop(idx)
-
-	def deactivate(it, key_):
-		if type(key_) is int:
-			if key_>=len(it):
-				raise IndexError( "index '%i' out of range'0 - %i'" % (key_, len(it)-1))
-			key_ = it[key_][0]
-		idx = it.get_place(key_)
-		if idx is None:
-			return
-		it[idx] = ';'+key_, it[key_]
+		it[idx] = ';'+key, it[key]
 
 	def write_out(it):
 		out = "[%s]\n" % it.name
@@ -177,7 +200,7 @@ class IniSections(xlist):
 		xlist.__init__(it)
 		it.filename = ''
 		from sys import _current_frames as _cf
-		callingFilename = _cf().values()[0].f_back.f_code.co_filename
+		callingFilename = tuple(_cf().values())[0].f_back.f_code.co_filename
 		it.callDir = ph.dirname(ph.realpath(callingFilename))
 
 	@classmethod
@@ -186,28 +209,28 @@ class IniSections(xlist):
 		instance.load(file_name, dbg=dbg)
 		return instance
 
-	def __getitem__(it, key_):
-		if type(key_) is int:
-			return xlist.__getitem__(it, key_)
-		elif it.has_key(key_):
-			return xlist.__getitem__(it, it.get_place(key_))
+	def __getitem__(it, key):
+		if type(key) is int:
+			return xlist.__getitem__(it, key)
+		elif it.has_key(key):
+			return xlist.__getitem__(it, it.get_place(key))
 		else:
 			new_section = Section()
-			new_section.name = key_
+			new_section.name = key
 			it.append(new_section)
-			return it[key_]
+			return it[key]
 
 	get_section = __getitem__
 
-	def __setitem__(it, key_, value):
-		if type(key_) is int:
-			xlist.__setitem__(it, key_, value)
-		elif it.has_key(key_):
-			xlist.__setitem__(it, it.get_place(key_), value)
+	def __setitem__(it, key, value):
+		if type(key) is int:
+			xlist.__setitem__(it, key, value)
+		elif it.has_key(key):
+			xlist.__setitem__(it, it.get_place(key), value)
 		return
 
 	keys = lambda it: xlist(map(lambda section: section.name, it))
-	has_key = lambda it, key_: key_ in it.keys()
+	has_key = lambda it, key: key in it.keys()
 	get_sections_names = lambda it: tuple(it.keys())
 	dump_sections_names = lambda it: ', '.join(it.get_sections_names())+'\n'
 
@@ -282,7 +305,7 @@ class IniSections(xlist):
 					splitCnt -= 1
 				if not(splitCnt):
 					continue
-				_dbg("Loading old config line:\n%s\nsplitCnt:%i\n" % (inputLine, splitCnt))
+				_d("Loading old config line:\n%s\nsplitCnt:%i\n" % (inputLine, splitCnt))
 				split_line = inputLine.split(':', splitCnt)
 				if len(split_line)==3:
 					section_name, name, value = split_line

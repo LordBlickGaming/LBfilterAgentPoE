@@ -3,157 +3,169 @@
 # -*- coding: utf-8 -*-
 # -*- tabstop: 4 -*-
 
-from clIniFile import IniSections, _p, xlist, hh
-from clFilterPoE import nvrsnkSections, Rule, _d, _range
-from uiMySinker import wg
-from os import path as ph
-from uiMySinker import lsFiles
+from clIniFile_py3 import IniSections, _p, _d as _di, xlist, hh
+from os import path as ph, getcwd as pwd, chdir as cd
 from clZip import ztree as zt, zunp as zu
-cfgFiles = lambda key: "%sFN" % key if key in lsFiles else None
-_y = lambda _bool: ('No', 'Yes')[_bool]
+from datetime import datetime as dttm
+def dt_uiso(iso_txt):
+	if not(iso_txt):
+		return ''
+	if iso_txt[-1].upper()=='Z':
+		txt = iso_txt[:-1]
+	else:
+		txt = iso_txt
+	return dttm.fromisoformat(txt).strftime("%Y.%m.%d – %H:%M:%S")
 
-VERSION = '0.91'
+
+_y = lambda _bool: ('No', 'Yes')[_bool]
+_n = '\n'
+
+VERSION = '0.95'
 Strictneses = 'Soft', 'Regular', 'Semi-Strict', 'Strict', 'Very-Strict', 'Uber-Strict', 'Uber-Plus-Strict'
-Styles = 'Default', 'Azurite', 'Blue', 'CustomSounds', 'Gaia', 'Purple', 'Slick', 'Vaal', 'Velvet'
+Styles = 'Default Azurite Blue CustomSounds Gaia Purple Slick Vaal Velvet'.split()
+file_types = 'Zip In Out'.split()
+cfgFiles = lambda key: f"{key}FN" if key in file_types else None
 
 class mySinker:
 	def __init__(mn):
 		mn.uiInit()
 		mn.appStart()
 		mn.uiConn()
-		mn.ui.uiEnter()
+		mn.ui.Enter()
 
 	uiFn = lambda mn, fileName: fileName.replace(ph.expanduser('~'), '~')
 	otFn = lambda mn, fileName: fileName.replace('NeverSink', mn.cfg['Main']['ModName'])
 
 	def uiInit(mn):
 		from uiMySinker import mySinker_UI
-		ui = mn.ui = mySinker_UI()
-		ui.mainWindow.connect("destroy", lambda w: mn.appExit())
-		mn._p = ui.logView.insert_end
+		ui = mn.ui = mySinker_UI(ph.realpath(__file__))
+		global _d, _l, _lp
+		_d, _l, _lp = mn._d, ui._p, ui._lp
 
 	def _d(mn, *k, **kk):
-		return (mn.ui.logView.insert_end(*k, **kk) if mn.dbg else _d(*k, **kk))
+		return (_lp(*k, **kk) if mn.dbg else _di(*k, **kk))
+
+	go_SetFileNameZip = lambda mn, b: mn.appSetFileName('Zip')
+	go_SetFileNameIn = lambda mn, b: mn.appSetFileName('In')
+	go_SetFileNameOut = lambda mn, b: mn.appSetFileName('Out')
 
 	def uiConn(mn):
 		ui = mn.ui
-		ui.buttonExit.connect("clicked", lambda w: mn.appExit())
-		map(lambda select: getattr(ui, "buttonFileName"+select).connect(
-			"clicked", lambda xargs: mn.appSetFileName(select)), lsFiles)
-		ui.buttonLastRel.connect("clicked", lambda w: mn.appNvrsRelease())
-		ui.buttonUnZip.connect("clicked", lambda w: mn.appUnZip())
-		ui.buttonConvert.connect("clicked", lambda w: mn.appConvert())
-		ui.buttonDiff.connect("clicked", lambda w: mn.appDiff())
-		ui.chkDbg.connect("toggled", mn.uiDebug)
-		d = ui.dlgs
+		handlers = ui.Connections()
+		for hn in (dr[3:] for dr in dir(mn) if dr[:3]=='go_'):
+			handlers[f"do_{hn}"] = getattr(mn, f"go_{hn}")
+		ui.bld.connect_signals(handlers)
+		d = ui.opts
+		d.PreferencesStore = mn.appNewPreferences
 		for ui_pref in d.lsUpdate:
 			if mn.cfg['Main'][ui_pref]:
 				setattr(d, ui_pref, mn.cfg['Main'][ui_pref])
-		d.PreferencesStore = mn.appNewPreferences
-		ui.buttonPreferences.connect("clicked", lambda w: mn.appPreferences())
 
-	def appPreferences(mn):
-		mn.ui.dlgs.showDlgPref(Strictneses, Styles, mn.appLeaguesList)
+	def go_Preferences(mn, b):
+		ui = mn.ui
+		ui.opts.dlgShow(Strictneses, Styles, mn.appLeaguesList)
 
 	def appNewPreferences(mn):
-		d =  mn.ui.dlgs
+		d =  mn.ui.opts
 		for ui_pref in d.lsUpdate:
 			mn.cfg['Main'][ui_pref] = getattr(d, ui_pref)
 		mn.appUpdateFilenames()
 
-	def uiDebug(mn, check):
+	def go_Debug(mn, check):
 		mn.dbg = bool(check.get_active())
 
 	def apiJSON(mn, host, request, secure=False):
 		jsonData = None
 		import json
-		import httplib
+		import http.client as htcl
 		headers = {
-			#'Accept' : 'text/plain',
 			'Accept' : 'application/json',
 			'charset' : 'utf-8',
-			'User-agent' : ("LBfilterAgentPoE/%s" % VERSION)}
-		mn._p("connecting to host „")
-		mn._p(host, 'tgFileName')
-		mn._p("” with request„")
-		mn._p(request, 'tgFileName')
-		mn._p("”:\n")
+			'User-agent' : f"LBfilterAgentPoE/{VERSION}"}
+		_lp( (("connecting to host „"), (host, 'fnm'),
+			("” with request„"), (request, 'fnm'), "”:\n") )
 		if secure:
-			connWeb = httplib.HTTPSConnection(host)
+			connWeb = htcl.HTTPSConnection(host)
 		else:
-			connWeb = httplib.HTTPConnection(host)
+			connWeb = htcl.HTTPConnection(host)
 		connWeb.request('GET', request, '', headers)
 		respWeb = connWeb.getresponse()
 		if respWeb.status == 200:
 			respBody = respWeb.read()
 			jsonData = json.loads(respBody)
 		else:
-			mn._p("Error:%s - %s\n" % (respWeb.status, respWeb.reason), 'tgErr')
+			_l(f"Error:{respWeb.status} - {respWeb.reason}\n", 'err')
 		connWeb.close()
 		return jsonData
 
 	def githubJSON(mn, user, repo):
-		host = 'api.github.com'
-		request = "/repos/%s/%s/releases/latest" % (user, repo)
+		host, request = 'api.github.com', f"/repos/{user}/{repo}/releases/latest"
 		return mn.apiJSON(host, request, True)
 
 	def appLeaguesList(mn):
-		# - cached locally until any of league or 2-week of last check expires.
-		#Probably not necessary - laded in UI stays to close app and rare use…
 		host, request = 'api.pathofexile.com', '/leagues?type=main'
 		jsonLeagues = mn.apiJSON(host, request)
 		if not(jsonLeagues):
 			return []
-		mn._p("Got leagues Info…\n")
+		_l("Got leagues Info…\n")
 		lsLeague = []
 		for idx, league in enumerate(jsonLeagues):
-			mn._d("ID: „%s”, Desc: „%s”\n" % (str(league['id']), str(league['description'])))
-			mn._d("  Start: %s\n" % str(league['startAt']))
-			mn._d("  Ends: %s\n" % str(league['endAt']))
-			if 'registerAt' in league.keys():
-				mn._d("  Registerable from: %s\n" % str(league['registerAt']))
-			mn._d("  Ladder: %s\n" % str(league['url']))
-			if 'event' in league.keys():
-				mn._d("  Is It Event?: %s\n" % _y(league['event']))
-			mn._d("  Delving allowed?: %s\n" % _y(league['delveEvent']))
+			lg_keys = tuple(league.keys())
+			_d( ("ID: „", (f"{league['id']}", 'phr'), "”, Desc: „",
+				(f"{league['description']}", 'phr'), "”\n",
+				"  Start: ", (f"{dt_uiso(league['startAt'])}", 'phr'), "\n",
+				"   Ends: ", (f"{dt_uiso(league['endAt'])}", 'phr'), "\n") )
+			if 'registerAt' in lg_keys:
+				_d( ("  Registerable from: ", (f"{dt_uiso(league['registerAt'])}", 'phr'), "\n") )
+			_d( ("  Ladder: ", (f"{league['url']}", 'phr'), "\n") )
+			if 'event' in lg_keys:
+				_d( (f"  Is It Event?: ", (f"{_y(league['event'])}", 'phr'), "\n") )
+			if 'delveEvent' in lg_keys:
+				_d( (f"  Delving allowed?: ", (f"{_y(league['delveEvent'])}", 'phr'), "\n") )
 			lsLeague.append(str(league['id']))
 		return lsLeague
 
-	def appNvrsRelease(mn):
+	def go_NvrsRelease(mn, b):
 		user, repo = 'NeverSinkDev', 'NeverSink-Filter'
-		jsonLastRelease = mn.githubJSON(user, repo)
-		if not(jsonLastRelease):
+		#jsonLastRelease
+		jsnLR = mn.githubJSON(user, repo)
+		if not(jsnLR):
 			return None
-		sep = '-------------------------------------------------------------------------------\n'
-		mn._p(sep)
-		rel_v = str(jsonLastRelease['tag_name'])
-		txtO = "Latest Neversink release(tag: %s): „%s”\n" % (rel_v, str(jsonLastRelease['name']))
-		txtO += "  url: %s\n" % str(jsonLastRelease['html_url'])
-		txtO += "  Created: %s\n" % str(jsonLastRelease['created_at'])
-		txtO += "  Published: %s\n" % str(jsonLastRelease['published_at'])
+		rel_keys = tuple(jsnLR.keys())
+		sep = f"{_n:–>80}"
+		_l(sep)
+		rel_v = str(jsnLR['tag_name'])
+		_lp( ("Latest Neversink release(tag: ", (f"{rel_v}", 'num'), "): „",
+			(f"{jsnLR['name']}", 'phr'), "”\n",
+			"  url: ", (f"{jsnLR['html_url']}", 'fnm'), "\n",
+			"  Created: ", (f"{jsnLR['created_at']}", 'phr'), "\n",
+			"  Published: ", (f"{jsnLR['published_at']}", 'phr'), "\n") )
+		txtO = ''
 		txt1 = '  Description:\n'
-		for desc_line in str(jsonLastRelease['body']).splitlines():
+		for desc_line in jsnLR['body'].splitlines():
 			ln = desc_line.strip()
 			if ln:
-				txt1 += "    %s\n" % ln
+				txt1 += f"    {ln}\n"
 		if txt1:
 			txtO += txt1.join((sep,)*2)
-		zip_fn = "%s-%s.zip" % (repo, rel_v)
-		tar_gz_fn = "%s-%s.tar.gz" % (repo, rel_v)
-		#txtO += "  Zip to download: %s → %s\n" % (str(jsonLastRelease['zipball_url']), zip_fn)
-		#txtO += "  Tar to download: %s → %s\n" % (str(jsonLastRelease['tarball_url']), tar_gz_fn)
+		zip_fn = f"{repo}-{rel_v}.zip"
+		tar_gz_fn = f"{repo}-{rel_v}.tar.gz"
+		if 'zipball_url' in rel_keys and(jsnLR['zipball_url']):
+			txtO += f"  Zip to download: {jsnLR['zipball_url']} → {zip_fn}\n"
+		if 'tarball_url' in rel_keys and(jsnLR['tarball_url']):
+			txtO += f"  Tar to download: {jsnLR['tarball_url']} → {tar_gz_fn}\n"
 		#https://api.github.com/repos/NeverSinkDev/NeverSink-Filter/zipball/6.7
 		#   ↓
 		#https://github.com/NeverSinkDev/NeverSink-Filter/archive/6.7.zip
-		frnd_url_base = "https://github.com/NeverSinkDev/NeverSink-Filter/archive/%s" % rel_v
-		txtO += "  Friendly Zip download: %s.zip → %s\n" % (frnd_url_base, zip_fn)
-		txtO += "  Friendly Tar download: %s.tar.gz → %s\n" % (frnd_url_base, tar_gz_fn)
-		mn._p(txtO)
+		frnd_url_base = f"https://github.com/NeverSinkDev/NeverSink-Filter/archive/{rel_v}"
+		txtO += f"  Friendly Zip download: {frnd_url_base}.zip → {zip_fn}\n"
+		txtO += f"  Friendly Tar download: {frnd_url_base}.tar.gz → {tar_gz_fn}\n"
+		_l(txtO)
 		if zip_fn==ph.basename(mn.cfg['Main']['ZipFN']):
-			mn._p('Seems that you have proper zip file downloaded already.\n')
+			_l('Seems that you have proper zip file downloaded already.\n')
 		else:
-			mn._p('Seems that you need to download proper zip file.\n')
-		mn._p('\n')
+			_l('Seems that you need to download proper zip file.\n')
+		_l('\n')
 
 	def appUpdateFilename(mn, select, bUpEmptyTxt=True):
 		trans = cfgFiles(select)
@@ -161,17 +173,17 @@ class mySinker:
 			return
 		ui = mn.ui
 		lastFN = mn.cfg['Main'][trans]
-		lblDspl = getattr(ui, 'dsplFilename' + select)
+		lblDspl = getattr(ui, f"dspl{select}FN")
 		if lastFN:
 			lblDspl.set_text(lastFN.replace(ph.expanduser('~'), '~'))
 		else:
 			lblDspl.set_text(ui.txtFN)
 
-	def appCheckFilenames(mn):
+	def appButtsLogic(mn):
 		from os import access, W_OK
 		ui = mn.ui
 		lsCheck = []
-		for select in lsFiles:
+		for select in file_types:
 			trans = cfgFiles(select)
 			cfgPath = mn.cfg['Main'][trans]
 			if not(cfgPath):
@@ -183,21 +195,31 @@ class mySinker:
 				lsCheck.append(t)
 			else:
 				lsCheck.append(ph.isfile(cfgPath))
-		ui.buttonConvert.set_sensitive(all(lsCheck))
-		ui.buttonUnZip.set_sensitive(ph.isfile(mn.cfg['Main'][cfgFiles('Zip')]))
-		ui.buttonDiff.set_sensitive(all([ph.isfile(mn.cfg['Main'][cfgFiles(select)]) for select in 'In Out'.split()]))
+		ui.buttConv.set_sensitive(all(lsCheck))
+		zcfg = mn.cfg['Main'][cfgFiles('Zip')]
+		icfg = mn.cfg['Main'][cfgFiles('In')]
+		bUnZip = zcfg and(icfg) and(ph.isfile(zcfg)) and(ph.isdir(ph.dirname((icfg))))
+		ui.buttUnZip.set_sensitive(bUnZip)
+		dfcfg = [mn.cfg['Main'][cfgFiles(select)] for select in 'In Out'.split()]
+		bDiff = all(dfcfg) and(all(ph.isfile(fn) for fn in dfcfg))
+		ui.buttDiff.set_sensitive(bDiff)
 		return True
 
 	def appSetFileName(mn, select):
+		ui = mn.ui
 		trans = cfgFiles(select)
 		if not(trans):
+			return
+		if not(mn.cfg['Main']['League'])\
+			and(mn.cfg['Main']['ModName']) and(mn.cfg['Main']['Strictness']):
+			_lp( (("Before setting filenames, set League name and other options bellow…\n", 'wrn'),) )
 			return
 		inputFN = mn.cfg['Main'][trans]
 		lastDir = ph.dirname(inputFN) if inputFN else mn.ui.runpath
 		fnFilter = (mn.ui.poeFilterZip, mn.ui.poeFilter)[select in('In', 'Out')]
-		newFilename = wg.dialogChooseFile(parent=mn.ui.mainWindow,
-			startDir=lastDir, filters=(fnFilter,),
-			title=("Select file to %s" % {'Zip':'unzip', 'In':'read', 'Out':'write'}[select]), bShowHidden=True,
+		fjd = {'Zip':'unzip', 'In':'read', 'Out':'write'}[select]
+		newFilename = ui.files.get_fn(startDir=lastDir, filters=(fnFilter,),
+			title=(f"Select file to {fjd}" ),
 			act=('file_open', 'file_save')[select=='Out'])
 		if newFilename:
 			mn.cfg['Main'][trans] = newFilename
@@ -207,19 +229,17 @@ class mySinker:
 		mn.appUpdateFilename(select)
 
 	def badZip(mn, zip_fn):
-			mn._p("Error: Selected zip file „", 'tgErr')
-			mn._p(hh(zip_fn), 'tgFileName')
-			mn._p("” can not be recognized!\n", 'tgErr')
+			_lp( (("Error: Selected zip file „", 'err'), (hh(zip_fn), 'fnm'),
+				("” can not be recognized!\n", 'err')) )
 
 	def tstZip(mn):
 		zip_fn = mn.cfg['Main']['ZipFN']
 		if not(zip_fn):
-			mn._p("Error: Select proper zip filename!\n", 'tgErr')
+			_l("Error: Select proper zip filename!\n", 'err')
 			return None
 		if (not(ph.isfile(zip_fn))):
-			mn._p("Error: Selected zip filename „", 'tgErr')
-			mn._p(hh(zip_fn), 'tgFileName')
-			mn._p("” does not exist!\n", 'tgErr')
+			_lp( (("Error: Selected zip filename „", 'err'), (hh(zip_fn), 'fnm'),
+				("” does not exist!\n", 'err')) )
 			return None
 		root_in_zip_dn = zt(zip_fn)[0]
 		nm_dt = root_in_zip_dn[:-1].split('-')
@@ -231,8 +251,12 @@ class mySinker:
 			return None
 
 	def appUpdateFilenames(mn):
-		in_dn = ph.dirname(mn.cfg['Main'][cfgFiles('In')])
-		out_dn = ph.dirname(mn.cfg['Main'][cfgFiles('Out')])
+		cfgZip = mn.cfg['Main'][cfgFiles('Zip')]
+		zip_dn = ph.dirname(cfgZip) if cfgZip else ''
+		cfgIn = mn.cfg['Main'][cfgFiles('In')]
+		in_dn = ph.dirname(cfgIn) if cfgIn else zip_dn
+		cfgOut = mn.cfg['Main'][cfgFiles('Out')]
+		out_dn = ph.dirname(cfgOut) if cfgOut else in_dn
 		tst = mn.tstZip()
 		if tst:
 			filter_name, ver, _ = tst
@@ -240,364 +264,95 @@ class mySinker:
 			if mn.cfg['Main']['Style']!='Default':
 				common_nm += '-'+mn.cfg['Main']['Style']
 			common_nm += '.filter'
-			mn.cfg['Main'][cfgFiles('In')] = "%s/%s-%s" % (in_dn, filter_name, common_nm)
-			mn.cfg['Main'][cfgFiles('Out')] = "%s/%s-%s" % (out_dn, mn.cfg['Main']['ModName'], common_nm)
+			mn.cfg['Main'][cfgFiles('In')] = f"{in_dn}/{filter_name}-{common_nm}"
+			mn.cfg['Main'][cfgFiles('Out')] = f"{out_dn}/{mn.cfg['Main']['ModName']}-{common_nm}"
 			for select in 'In Out'.split():
 				mn.appUpdateFilename(select)
 
 	def appListZip(mn):
 		zip_fn = mn.cfg['Main']['ZipFN']
-		mn._p("Zip file „")
-		mn._p(hh(zip_fn), 'tgFileName')
-		mn._p("” has files:\n")
+		_lp( ("Zip file „", (hh(zip_fn), 'fnm'), "” has files:\n") )
 		for fn in zip_files:
-			mn._p("„")
-			mn._p(str(fn), 'tgFileName')
-			mn._p("”\n")
+			_lp( ("„", (str(fn), 'fnm'), "”\n") )
 
-	def appUnZip(mn):
+	def go_UnZip(mn, b):
 		tst = mn.tstZip()
 		if tst:
 			filter_name, ver, root_in_zip_dn = tst
 			zip_fn = mn.cfg['Main']['ZipFN']
 			extract_fn = root_in_zip_dn
 			if mn.cfg['Main']['Style']!='Default':
-				extract_fn += "(STYLE) %s/" % mn.cfg['Main']['Style'].upper()
+				extract_fn += f"(STYLE) {mn.cfg['Main']['Style'].upper()}/"
 			Strictness = mn.cfg['Main']['Strictness']
 			if not(Strictness in Strictneses):
 				mn.badZip()
 				return
 			strct_idx = Strictneses.index(Strictness)
-			extract_fn += "NeverSink's filter - %d-%s" % (strct_idx, Strictness.upper())
+			extract_fn += f"NeverSink's filter - {strct_idx:d}-{Strictness.upper()}"
 			if mn.cfg['Main']['Style']!='Default':
-				extract_fn += " (%s) " % mn.cfg['Main']['Style']
+				extract_fn += f" ({mn.cfg['Main']['Style']}) "
 			extract_fn += ".filter"
 			unzipped_fn = mn.cfg['Main']['InFN']
 			zu(zip_fn, extract_fn, unzipped_fn)
+			#Make sure Linux rules… :P
+			CRLF, LF = b'\r\n',  b'\n'
+			with open(unzipped_fn, 'rb') as crlf_fd:
+				data = crlf_fd.read()
+			with open(unzipped_fn, 'wb') as lf_fd:
+				lf_fd.write(data.replace(CRLF, LF))
+			_lp( ("Zip file:„", (zip_fn, 'fnm'), "” unpacked to:\n",
+				"    „", (unzipped_fn, 'fnm'), "”\n") )
 
-	def appConvert(mn):
-		fn = mn.cfg['Main']['InFN']
-		inFS = nvrsnkSections(mn._p, debug=mn.dbg)
-		inFS.load(fn)
-		if not(inFS.fnLoad):
+	def go_Convert(mn, b):
+		from mySinkGo import sinkConvert
+		sinkConvert(mn.cfg['Main']['InFN'], mn.cfg['Main']['OutFN'], mn.dbg, _lp, _d)
+
+	def go_Diff(mn, b):
+		from difflib import unified_diff as diffu
+		old_fn = mn.cfg['Main']['InFN']
+		new_fn = mn.cfg['Main']['OutFN']
+		_l("Differences:\n")
+		if not(old_fn) or(not(new_fn)):
+			_l("– no both filenames set\n ")
 			return
-		_d = mn._d
-		_p = mn._p
-		def tfs(slice_, old, new, noMatchErr=False):
-				for rule in slice_:
-					rule.tuneFontSize(old, new, noMatchErr)
-		############################################################################################################################################
-		#Oni-Goroshi Farm
-		sect = inFS.getSectionById(100, "OVERRIDE AREA 1 - Override ALL rules here")
-		if sect:
-			txtRule = '\nShow # Goldrim chance base on Twilight Strand\n'
-			txtRule += 'Class "Helmets"\nBaseType "Leather Cap"\n'
-			txtRule += 'Rarity Normal\n'
-			txtRule += 'ItemLevel 3\n'
-			txtRule += 'SetFontSize 40\n'
-			txtRule += 'SetTextColor 255 255 255\n'
-			txtRule += 'SetBorderColor 0 200 0 190\n'
-			txtRule += 'SetBackgroundColor  80 170 100 128\n'
-			txtRule += '\n'
-			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
-			newRule = Rule(mn._p, debug=mn.dbg)
-			acquired = newRule.load(linesRule)
-			sect[0][0].insert(0, newRule)
-			#
-			txtRule = '\nShow # Show quality evasion Shields\n'
-			txtRule += 'Class "Shields"\nBaseType "Buckler"\n'
-			txtRule += 'Rarity Normal\n'
-			txtRule += 'Quality >= 15\n'
-			txtRule += 'SetFontSize 30\n'
-			txtRule += 'SetTextColor 255 255 255\n'
-			txtRule += 'SetBorderColor 0 200 0 190\n'
-			txtRule += 'SetBackgroundColor  80 170 100 128\n'
-			txtRule += '\n'
-			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
-			newRule = Rule(mn._p, debug=mn.dbg)
-			acquired = newRule.load(linesRule)
-			sect[0][0].insert(1, newRule)
-		#manipulate chisel recipe
-		ssect = inFS.getSubsecttionById(800, 817, "Chisel recipe items")
-		if ssect:
-			rules = ssect[0]
-			if len(rules):
-				for rule in rules:
-					q = rule.get_cond_args('Quality_Hi')
-					r = rule.get_cond_args('Rarity_Hi')#[0]
-					if q==('>', '11') and(r) and(r[0]=='Magic'):
-						rule.replace_cond_args('Quality_Hi', ('>', '17'))
-					elif q==None:
-						rule.Conditions['Quality'] = (True, ('>=', '5'), 0, '')
-		#lower Font Size
-		sect = inFS.getSectionById(1000, "Currency - PART 1 - Common currency")
-		if sect:
-			rules = sect.srch_rule_basetype("Silver Coin", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 38, True)
-				rule.setColor("SetTextColor", 100, 0, 100, 255)
-				rule.setColor("SetBackgroundColor", 190, 178, 135, 200)
-				rule.setColor("SetBorderColor", 150, 0, 150, 200)
-			#  "Orb of Chance" "Orb of Alteration" "Chromatic Orb" "Jeweller's Orb" "Glassblower's Bauble"
-			rules = sect.srch_rule_basetype("Orb of Chance", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 38, True)
-				rule.setColor("SetBackgroundColor", 190, 178, 0, 255)
-			# "Orb of Transmutation" "Blacksmith's Whetstone" "Alchemy Shard"
-			rules = sect.srch_rule_basetype("Orb of Transmutation", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 36, True)
-			# "Portal Scroll"
-			rules = sect.srch_rule_basetype("Portal Scroll", True)
-			for rule in rules:
-				rule.tuneFontSize(40, 32, True)
-			# "Armourer's Scrap" "Orb of Augmentation" "Transmutation Shard" "Alteration Shard"
-			rules = sect.srch_rule_basetype("Armourer's Scrap", True)
-			for rule in rules:
-				rule.tuneFontSize(40, 32, True)
-			#  "Scroll of Wisdom"
-			rules = sect.srch_rule_basetype("Scroll of Wisdom", True)
-			for rule in rules:
-				rule.tuneFontSize(40, 32, False)
-				rule.tuneFontSize(45, 35, False)
-		#
-		sect = inFS.getSectionById(1700, "UTILITY FLASKS (Levelling Rules)")
-		if sect:
-			sect.tuneFontSize(45, 36)
-			rules = sect.srch_rule_basetype("Quicksilver Flask", True)
-			for rule in rules:
-				rule.Actions.deactivate('PlayAlertSound')
-		ssect = inFS.getSubsecttionById(1900, 1908, "Sorted Map Fragments")
-		if ssect:
-			for div in ssect:
-				for rule in div:
-					baseRow = rule.Conditions['BaseType']
-					classRow = rule.Conditions['Class']
-					if not(baseRow) and(classRow) and("Map Fragments" in classRow[1][0]):
-						rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(1900, 1909, "Scarabs")
-		if ssect:
-			for div in ssect:
-				for rule in div:
-					baseRow = rule.Conditions['BaseType']
-					if baseRow:
-						baseTxt = baseRow[1][0].strip("\"")
-						if baseTxt=="Rusted":
-							rule.tuneFontSize(45, 38, True)
-						elif baseTxt=="Polished":
-							rule.tuneFontSize(45, 40, True)
-						elif baseTxt=="Gilded":
-							rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(1900, 1910, "Remaining Map Fragments")
-		if ssect:
-			for div in ssect:
-				for rule in div:
-					baseRow = rule.Conditions['BaseType']
-					classRow = rule.Conditions['Class']
-					if not(baseRow) and(classRow):
-						classTxt = classRow[1][0].strip("\"")
-						if classTxt in ("Map Fragments", "Pantheon Soul"):
-							rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(2000, 2001, "Regular Rare Currency")
-		if ssect:
-			ssect.tuneFontSize(45, 40)
-		ssect = inFS.getSubsecttionById(2000, 2004, "Delve Currency - Resonators")
-		if ssect:
-			rules = ssect.srch_rule_comments("resonator $t->1", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 42, True)
-			rules = ssect.srch_rule_comments("resonator $t->2", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 40, True)
-			rules = ssect.srch_rule_comments("resonator $t->3", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 38, True)
-		ssect = inFS.getSubsecttionById(2000, 2005, "Delve Currency - Fossil")
-		if ssect:
-			rules = ssect.srch_rule_comments("fossil $t->1", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 42, True)
-			rules = ssect.srch_rule_comments("ossil $t->2", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 40, True)
-			rules = ssect.srch_rule_comments("fossil $t->3", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 38, True)
-			rules = ssect.srch_rule_comments("fossil $t->r", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 36, True)
-		# Einhar is back, but no nets tho…
-		#ssect = inFS.getSubsecttionById(2000, 2006, "Bestiary Currency")
-		#if ssect:
-			#ssect.erase()
-		ssect = inFS.getSubsecttionById(2000, 2007, "Essence Tier List")
-		if ssect:
-			ssect.tuneFontSize(38, 36)
-			ssect.tuneFontSize(40, 38)
-			ssect.tuneFontSize(42, 40)
-			rules = ssect.srch_rule_basetype("Screaming Essence of", True)
-			for rule in rules:
-				rule.tuneFontSize(45, 42, True)
-		ssect = inFS.getSubsecttionById(2000, 2008, "Perandus")
-		if ssect:
-			ssect.tuneFontSize(36, 32)
-			ssect.tuneFontSize(40, 38)
-			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(2000, 2009, "Breach")
-		if ssect:
-			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(2000, 2010, "Others")
-		if ssect:
-			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(2100, 2101, "Exceptions to prevent ident. mistakes")
-		if ssect:
-			ssect.tuneFontSize(45, 38)
-		ssect = inFS.getSubsecttionById(2100, 2104, "T3 - Decent cards")
-		if ssect:
-			ssect.tuneFontSize(45, 42)
-		ssect = inFS.getSubsecttionById(2100, 2107, "T4 - ...showing the remaining cards")
-		if ssect:
-			ssect.tuneFontSize(45, 40)
-		ssect = inFS.getSubsecttionById(2300, 2305, "Multi-Unique bases.")
-		if ssect:
-			ssect.tuneFontSize(45, 42)
-		#show highest tiers of mana/life flasks
-		ssect = inFS.getSubsecttionById(2600, 2601, "Hide outdated flasks")
-		if ssect:
-			rule = ssect[0][2]
-			ruleBase = rule.get_cond_args('BaseType')
-			if ruleBase[-2:]==tuple("Divine Eternal".split()):
-				rule.replace_cond_args('BaseType', ruleBase[:-2])
-			else:
-				print("Divine/Eternal flasks could be not showed, check rules change in 2500/2501 Otdated flask section")
-		sect = inFS.getSectionById(2700, "Leveling - Merged Rules")
-		if sect:
-			sect.tuneFontSize(42, 34)
-		sect_nm = "Leveling - RGB Recipes"
-		sect = inFS.getSectionById(2800, sect_nm)
-		if sect:
-			div = sect[0][0]
-			for rule in div[0:2]:
-				rule.tuneFontSize(45, 40)
-			for rule in div[2:4]:
-				rule.tuneFontSize(36, 32)
-			w = div[1].get_cond_args('Width_Hi')
-			if w==('<=', '1'):
-				div[1].replace_cond_args('Width_Hi', ('1',))
-			#div[2].new_cond_args('ItemLevel_Hi', ('<=', '67'), 38, 'No respect for huge chromatic orb on maps')
-			#due to strange bug plague, „ItemLevel” condition does not accept commentary hash
-			div[2].new_cond_args('ItemLevel_Hi', ('<=', '67'), 38, None)
-		#
-		ssect = inFS.getSubsecttionById(2900, 2901, "Leveling rares - specific items")
-		if ssect:
-			ssect.tuneFontSize(45, 34, True)
-		#
-		for idx in (2902, 2903):
-			ssect = inFS.getSubsecttionById(2900, idx, "Leveling rares - Progression - First Levels")
-			if ssect:
-				ssect.tuneFontSize(45, 36, True)
-		ssect = inFS.getSubsecttionById(2900, 2904, "Leveling rares - Progression - First Levels")
-		if ssect:
-			div = ssect[0]
-			tfs(div[:2], 45, 36, True)
-			tfs(div[2:], 36, 32, True)
-		#lower Font Size of unsorted by level 4L
-		ssect = inFS.getSubsecttionById(3000, 3001, "Linked gear - 4links")
-		if ssect:
-			ssect.tuneFontSize(45, 36, True)
-		# Linked gear - Caster Weapon Configuration
-		ssect = inFS.getSubsecttionById(3000, 3002, "Linked gear - Caster Weapon Configuration")
-		if ssect:
-			ssect.tuneFontSize(40, 34, True)
-		#lower Font Size of unsorted by level 3L
-		ssect = inFS.getSubsecttionById(3000, 3003, "Linked gear - 3links")
-		if ssect:
-			div = ssect[0]
-			tfs(div[:2], 40, 34, True)
-			div[2].tuneFontSize(36, 32, True)
-		ssect = inFS.getSubsecttionById(3000, 3004, "Util end Act1")
-		if ssect:
-			div = ssect[0]
-			tfs(div[3:], 36, 32, True)
-			div[3].tuneFontSize(40, 34, True)
-			tfs(div[:3], 45, 36, True)
-		#summoner recipe shield
-		ssect = inFS.getSubsecttionById(3000, 3007, "Optional Recipes")
-		if ssect:
-			ssect.activate()
-		# quality, lvl, nonmf
-		ssect = inFS.getSubsecttionById(3000, 3008, "20% quality items for those strange people who want them")
-		if ssect:
-			ssect.activate()
-		#enable lvl, small
-		ssect = inFS.getSubsecttionById(3200, 3202, "Vendor Normal items - Until level 3 (Remaining)")
-		if ssect:
-			ssect.activate()
-		# show, tune font, insert rule from text
-		sect = inFS.getSectionById(3400, "HIDE LAYER 5 - Remaining Items")
-		sect = False
-		if sect:
-			rule = sect[0][0][0]
-			rule.Appear = 'Show'
-			rule.tuneFontSize(26, 20, True)
-			txtRule = '\nShow # essence alchemy base for chaos recipe\nClass "Rings" "Amulet" "Belts" "Gloves" "Boots" "Helmets"\n'
-			txtRule += 'Rarity Normal\nItemLevel >= 60\nSetFontSize 25\nSetTextColor 255 255 255\n'
-			txtRule += 'SetBorderColor 0 150 0 190\nSetBackgroundColor 20 70 30 128\n\n'
-			linesRule =  map(lambda line: line.strip(), txtRule.splitlines())
-			newRule = Rule(mn._p, debug=mn.dbg)
-			acquired = newRule.load(linesRule)
-			sect[0][0].insert(1, newRule)
-		#Disable >=4L dropsound
-		for sect in inFS:
-			for ssect in sect:
-				for div in ssect:
-					for rule in div:
-						if rule.get_cond_args('LinkedSockets_Hi')[-1]=='4':
-							rule.Actions.del_cmd('PlayAlertSound')
-		############################################################################################################################################
-		inFS.store(mn.cfg['Main']['OutFN'])
-
-	def run(mn, cmd, echo=True, out=''):
-		from subprocess import Popen
-		from shlex import split as shsp
-		from time import sleep
-		if echo:
-			mn._p("> %s\n" % cmd)
-		if out:
-			fd_out = open(out, "w")
-			fd_out.flush()
-			process = Popen(shsp(cmd), stdout=fd_out)
-		else:
-			process = Popen(shsp(cmd))
-		while process.poll() == None: # poll()=None means still running
-			sleep(.4)
-		if out:
-			fd_out.close()
-		return
-
-	def appDiff(mn):
-		fn1 = mn.cfg['Main']['InFN']
-		bn1 = ph.basename(fn1)
-		fn2 = mn.cfg['Main']['OutFN']
-		bn2 = ph.basename(fn2)
-		dn = ph.dirname(fn1)
-		cmd = "diff -u \"%s\" \"%s\"" % (fn1, fn2)
-		mn.run(cmd, out=("%s/Sink.diff" % dn))
+		cmph = ''
+		cmph = ph.commonpath( (old_fn, new_fn) )
+		if cmph:
+			cmph += ph.sep
+		dn = ph.dirname(old_fn)
+		diff_fn = ph.join(dn, "Sink.diff")
+		old_ld = new_ld = ''
+		def get_ld(fn):
+			with open(fn, 'r') as fd:
+				return [ln.rstrip('\n') for ln in fd.read().splitlines()]
+		old_ld = get_ld(old_fn)
+		new_ld = get_ld(new_fn)
+		if not(old_ld) or(not(new_ld)):
+			_l("– no both files data\n ")
+			return
+		old_fn_, new_fn_ = (fn.replace(cmph, '') for fn in (old_fn, new_fn))
+		diff4u = tuple(diffu(old_ld, new_ld, fromfile=old_fn_, tofile=new_fn_, lineterm=''))
+		diff_dt = '\n'.join(diff4u)
+		if not(diff_dt):
+			_lp( ((f"old_ld", 'err'), "==", (f"new_ld", 'num'), ": ", (f"{old_ld==new_ld}\n", 'srf')) )
+			return
+		diff_dt += '\n'
+		with open(diff_fn, 'w') as fd:
+			fd.write(diff_dt)
+		_lp( ((diff4u[0], 'err'), '\n', (diff4u[1], 'num'), ('\n[...]\n', 'srf')) )
 
 	def appCfgLoad(mn, restoreGeo=True):
 		ui = mn.ui
 		mn.cfg = IniSections()
-		cfg_fn = mn.ui.runpath+'/'+ ph.basename(__file__)+'.ini'
+		cfg_fn = ph.join(mn.ui.runpath, ph.basename(__file__)+'.ini')
 		if ph.isfile(cfg_fn):
 			mn.cfg.load(cfg_fn)
-			_p("Config file: '%s'\n" % (cfg_fn))
+			_p(f"Config file: '{cfg_fn}'\n")
 		if not(mn.cfg.filename):
 			mn.cfg.filename = cfg_fn
 		mn.lastcfg = mn.cfg['Main'].copy(), mn.cfg['UI'].copy()
 		if restoreGeo:
-			from dlgEngine import DialogEngine
 			ui.cfg = mn.cfg['UI']
-			ui.dlgEngine = DialogEngine(ui)
 			ui.restoreGeometry()
 		mn.dbg = (mn.cfg['Main']['Debug']=='True')
 		if not(mn.cfg['Main']['ModName']):
@@ -614,25 +369,28 @@ class mySinker:
 		if mn.lastcfg!=(mn.cfg['Main'], mn.cfg['UI']):
 			mn.cfg.section_place('Main', 0)
 			mn.cfg.store()
-			#_p("Written config:%s…\n" % mn.cfg.filename)
 
 	def appStart(mn):
 		mn.appCfgLoad()
-		for select in lsFiles:
+		for select in file_types:
 			mn.appUpdateFilename(select, False)
 		# Start time tick
-		from gobject import timeout_add as addTick
-		mn.chkThr = addTick(1000, mn.appCheckFilenames)
+		from uiMySinker import addTick
+		mn.chkThr = addTick(1000, mn.appButtsLogic)
 
 	def appStop(mn):
 		mn.appCfgStore()
 		# Stop time tick
-		from gobject import source_remove as unWatch
+		from uiMySinker import unWatch
 		unWatch(mn.chkThr)
 
-	def appExit(mn):
+	def go_CloseEv(mn, w, e):
 		mn.appStop()
-		mn.ui.uiExit()
+		return False
+
+	def go_Quit(mn, b):
+		mn.appStop()
+		mn.ui.Exit()
 
 if __name__ == "__main__":
 	mySinker()

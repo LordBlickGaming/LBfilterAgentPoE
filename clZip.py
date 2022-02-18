@@ -18,7 +18,7 @@ def ztree(zip_fn):
 def zunp(zip_fn, in_zip_fn, out_fn):
 	with zf(zip_fn, "r") as hZip:
 		h_unz = hZip.open(in_zip_fn)
-		h_st = open(out_fn, 'w')
+		h_st = open(out_fn, 'wb')
 		h_st.write(h_unz.read())
 		h_st.close()
 		h_unz.close()

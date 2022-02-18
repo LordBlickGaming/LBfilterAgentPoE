@@ -1,108 +1,197 @@
-#!/usr/bin/python2
+#!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # -*- coding: utf-8 -*-
 # -*- tabstop: 4 -*-
 
-from wgts import gtk, pango, goStr
-import wgts as wg
-lsFiles = 'Zip In Out'.split()
-LO_ROWS = len(lsFiles)+1
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk, Gdk, Pango, GLib
+addTick, addIdle, unWatch = GLib.timeout_add, GLib.idle_add, GLib.source_remove
 
-class Dialogs:
-	def __init__(it, ui, mainWindow):
+from os import path as ph
+H = ph.expanduser('~') # Home dir
+hh = lambda s: s.replace(H, '~')
+from sys import stdout as sto
+_p = lambda _str: sto.write(hh(str(_str)))
+debug = (False, True)[1]
+def _d(_str):
+	if debug: _p(_str)
+_l = None
+
+dDialogs = dict(zip(
+			'srch files opts'.split(),
+			(f"{nm}UI" for nm in 'Search Files Options'.split()),
+			))
+
+class DlgProto:
+	def __init__(it, ui):
 		it.ui = ui
-		it.mainWindow = mainWindow
-		#it.textView = textView
-		it.lgsCheck = it.dlgPreferences = it.PreferencesStore = it.dlgPrefPos = None
+		it.mainWindow = ui.mainWindow
+		it.pos = None
+		it.dlg = None
+		if hasattr(it, '_init') and(callable(it._init)):
+			it._init()
+
+	def Connections(it, dlg_discrm):
+		handlers = {}
+		for hn in (dr[3:] for dr in dir(it) if dr[:3]=='go_'):
+			handlers[f"{dlg_discrm}{hn}"] = getattr(it, f"go_{hn}")
+		return handlers
+
+	is_visible = lambda it: it.dlg and(hasattr(it.dlg, 'is_visible'))\
+		and(it.dlg.is_visible())
+
+class SearchUI(DlgProto):
+	def _init(it):
+		it.found = None
+		it.target_txtview = None
+		tsf = Gtk.TextSearchFlags
+		it.flags = tsf.TEXT_ONLY | tsf.VISIBLE_ONLY
+
+	def dlgBinds(it):
+		ui = it.ui
+		dlg = it.dlg = ui.dlgSrch
+		ui.Binds('eFind bSrchPrv bSrchNxt bSrchOK', dlg)
+		dlg.show_all()
+		ui.logView.changed = False # TODO: Implement blocking durring main proceeds, maybe threading?
+		it.target_txtview = ui.logView
+
+	def go_SrchUpdate(it, e):
+		it.searchFor(e.get_text(), 'interactive')
+
+	def go_SrchPrevious(it, b):
+		dlg = it.dlg
+		it.searchFor(it.dlg.eFind.get_text(), 'backward')
+
+	def go_SrchNext(it, b):
+		dlg = it.dlg
+		it.searchFor(it.dlg.eFind.get_text(), 'forward')
+
+	def searchFor(it, srch_txt, srch_type):
+		if srch_txt:
+			txtBuff = it.target_txtview.get_buffer()
+			lastfound = it.found
+			found = it.found = it.getFound(txtBuff, srch_type, srch_txt)
+			if lastfound and(not(found)):
+				found = it.found = it.getFound(txtBuff, srch_type, srch_txt)
+			if found:
+				it.target_txtview.scroll_to_iter (found[0], .1, False, .5, .5)
+				txtBuff.select_range(*found)
+
+	def getFound(it, txtBuff, srch_type, srch_txt):
+		dlg = it.dlg
+		if it.target_txtview.changed:
+			print("skip")
+			it.found = None
+			it.target_txtview.changed = False
+		if it.found:
+			if srch_type in ('interactive', 'backward'):
+				iterB = it.found[0]
+			else:
+				iterB = it.found[1]
+		else:
+			iterB = None
+		if not(iterB):
+			if srch_type in ('interactive', 'forward'):
+				iterB = txtBuff.get_start_iter()
+			else:
+				iterB = txtBuff.get_end_iter()
+		if srch_type in ('interactive', 'forward'):
+			return iterB.forward_search(srch_txt, it.flags, None)
+		else:
+			return iterB.backward_search(srch_txt, it.flags, None)
+
+	def dlgShow(it):
+		ui = it.ui
+		if it.dlg:
+			it.dlg.set_visible(True)
+		else:
+			it.dlgBinds()
+		dlg = it.dlg
+		if it.pos:
+			dlg.move(*it.pos)
+		txtBuff = it.target_txtview.get_buffer()
+		sel = txtBuff.get_selection_bounds()
+		if sel:
+			it.found = sel
+			it.dlg.eFind.set_text(txtBuff.get_text(*sel, False))
+
+	def dlgHide(it):
+		if it.is_visible():
+			dlg = it.dlg
+			it.pos = dlg.get_position()
+			dlg.set_visible(False)
+
+	go_SrchOK = lambda it, b: it.dlgHide()
+
+class FilesUI(DlgProto):
+	def dlgBinds(it):
+		ui = it.ui
+		dlg = it.dlg = ui.dlgGetFN
+		ui.Binds('buttFnOK buttFnCancel', dlg)
+		dlg.show_all()
+
+	def get_fn(it, startDir='', startFile='', filters=None, title='', act='file_open'):
+		dlg = it.dlg
+		if dlg:
+			dlg.present()
+		else:
+			it.dlgBinds()
+			dlg = it.dlg
+		if not(dlg):
+			print("WTF?!")
+			print(f"dlg:{dlg},\nit.dlg:{it.dlg},\nui.dlgGetFN:{it.ui.dlgGetFN}")
+			return
+		fca = Gtk.FileChooserAction
+		action = {
+			'file_open':  fca.OPEN,
+			'file_save':  fca.SAVE,
+			'dir_open':   fca.SELECT_FOLDER,
+			'dir_create': fca.CREATE_FOLDER,
+			}[act]
+		dlg.set_action(action)
+		for f in dlg.list_filters():
+			dlg.remove_filter(f)
+		for fnFilter in filters:
+			dlg.add_filter(fnFilter)
+		allFilter = Gtk.FileFilter()
+		allFilter.set_name("All files (*.*)")
+		allFilter.add_pattern("*")
+		dlg.add_filter(allFilter)
+		if startDir:
+			dlg.set_current_folder(startDir)
+		if startFile:
+			if act=='file_save':
+				dlg.set_current_name(startFile)
+			elif act=='file_open':
+				dlg.set_filename(startFile)
+		response = dlg.run()
+		fn = ''
+		if response == Gtk.ResponseType.OK:
+			fn = dlg.get_filename()
+		dlg.hide()
+		if fn:
+			return fn
+
+class OptionsUI(DlgProto):
+	def _init(it):
+		it.lgsCheck = it.PreferencesStore = None
 		it.League = it.ModName = it.Style = it.Strictness = ''
 		it.lsUpdate = "League ModName Style Strictness".split()
 
-	def dlgPreferencesCreate(it):
-		dlg = it.dlgPreferences = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		if hasattr(it.ui, 'accGroup'):
-			dlg.add_accel_group(it.ui.accGroup)
-		dlg.set_border_width(5)
-		#dlg.set_size_request(200, 100)
-		dlg.set_resizable(False)
-		dlg.set_title('Options and preferences')
-		dlg.set_modal(True)
-		dlg.set_transient_for(it.mainWindow)
-		dlg.set_destroy_with_parent(True)
-		dlg.set_deletable(False)
-		dlg.set_skip_taskbar_hint(False)
-		# # # # # # # # # # # # # # # # # # # # # # # # #
-		dlgFrame = gtk.Fixed()
-
-		vb = gtk.VBox(False, 10)
-		dlg.add(vb)
-
-		hb = gtk.HBox(False, 5)
-		l = gtk.Label("Current League name:")
-		hb.pack_start(l, True, False, 0)
-		e = dlg.eLeague = gtk.Entry()
-		hb.pack_start(e, True, True, 0)
-		vb.pack_start(hb, True, False, 0)
-		hb = gtk.HBox(False, 5)
-		bLeaguesOnline = gtk.Button("Load Leagues Online →")
-		hb.pack_start(bLeaguesOnline, True, False, 0)
-		bLeaguesOnline.connect("clicked", lambda xargs: it.getDlgPrefLeagues())
-		dlg.lsLeaguesOnline = gtk.ListStore(goStr,)
-		dlg.cbLeaguesOnline = gtk.ComboBox(dlg.lsLeaguesOnline)
-		cellRendr = gtk.CellRendererText()
-		dlg.cbLeaguesOnline.pack_start(cellRendr)
-		dlg.cbLeaguesOnline.set_attributes(cellRendr, text=0)
-		hb.pack_start(dlg.cbLeaguesOnline, True, False, 0)
-		bCopyLeaguesSelection = gtk.Button("↑Copy↑")
-		hb.pack_start(bCopyLeaguesSelection, True, False, 0)
-		bCopyLeaguesSelection.connect("clicked", lambda xargs: it.setDlgSelLeague())
-		vb.pack_start(hb, True, False, 0)
-
-		hb = gtk.HBox(False, 5)
-		l = gtk.Label("Modified filter base name:")
-		hb.pack_start(l, True, False, 0)
-		e = dlg.eModName = gtk.Entry()
-		hb.pack_start(e, True, False, 0)
-		vb.pack_start(hb, True, False, 0)
-
-		hb = gtk.HBox(False, 5)
-		l = gtk.Label("Select Strictness:")
-		hb.pack_start(l, True, False, 0)
-		dlg.lsStrictness = gtk.ListStore(goStr, )
-		dlg.cbStrictness = gtk.ComboBox(dlg.lsStrictness)
-		cellRendr = gtk.CellRendererText()
-		dlg.cbStrictness.pack_start(cellRendr)
-		dlg.cbStrictness.set_attributes(cellRendr, text=0)
-		hb.pack_end(dlg.cbStrictness, True, True, 0)
-		vb.pack_start(hb, True, False, 0)
-
-		hb = gtk.HBox(False, 5)
-		l = gtk.Label("Select Style:")
-		hb.pack_start(l, True, False, 0)
-		dlg.lsStyle = gtk.ListStore(goStr, )
-		dlg.cbStyle = gtk.ComboBox()
-		dlg.cbStyle.set_model(dlg.lsStyle)
-		cellRendr = gtk.CellRendererText()
-		dlg.cbStyle.pack_start(cellRendr)
-		dlg.cbStyle.set_attributes(cellRendr, text=0)
-		hb.pack_end(dlg.cbStyle, True, True, 0)
-		vb.pack_start(hb, True, False, 0)
-
-		hb = gtk.HBox(False, 5)
-		bOK = gtk.Button("OK",)
-		bOK.connect("clicked", lambda xargs: it.hideDlgPref(True))
-		hb.pack_end(bOK, True, False, 30)
-		bCancel = gtk.Button("Cancel")
-		bCancel.connect("clicked", lambda xargs: it.hideDlgPref())
-		hb.pack_end(bCancel, True, False, 0)
-		vb.pack_start(hb, True, False, 0)
+	def dlgBinds(it):
+		ui = it.ui
+		dlg = it.dlg = ui.dlgOpts
+		ui.Binds('bLeaguesOnline lsLeaguesOnline cbLeaguesOnline bCopyLeaguesSelection '\
+			'eLeague eModName lsStrictness cbStrictness lsStyle cbStyle bOptsOK bOptsCancel', dlg)
 		dlg.show_all()
 
-	def getDlgPrefLeagues(it):
+	def go_GetPrefLeagues(it, b):
 		if callable(it.lgsCheck):
 			lgs = it.lgsCheck()
 		else:
 			return
-		dlg = it.dlgPreferences
+		dlg = it.ui.dlgOpts
 		
 		dlg.lsLeaguesOnline.clear()
 		for lgu in lgs:
@@ -111,8 +200,8 @@ class Dialogs:
 		lgi = lgs.index(lg) if lg in lgs else 4
 		dlg.cbLeaguesOnline.set_active(lgi)
 
-	def setDlgSelLeague(it):
-		dlg = it.dlgPreferences
+	def go_SetSelLeague(it, b):
+		dlg = it.ui.dlgOpts
 		lgi = dlg.cbLeaguesOnline.get_active()
 		print("Selected:%d" % lgi)
 		if lgi < 0:
@@ -121,14 +210,15 @@ class Dialogs:
 		print("New League text:„%s”" % lgTxt)
 		dlg.eLeague.set_text(lgTxt)
 
-	def showDlgPref(it, Strictneses, Styles, lgsCheck):
-		if it.dlgPreferences:
-			it.dlgPreferences.present()
+	def dlgShow(it, Strictneses, Styles, lgsCheck):
+		ui = it.ui
+		if it.dlg:
+			it.dlg.present()
 		else:
-			it.dlgPreferencesCreate()
-		dlg = it.dlgPreferences
-		if it.dlgPrefPos:
-			dlg.move(*it.dlgPrefPos)
+			it.dlgBinds()
+		dlg = it.dlg
+		if it.pos:
+			dlg.move(*it.pos)
 		dlg.eLeague.set_text(it.League)
 		if callable(lgsCheck):
 			it.lgsCheck = lgsCheck
@@ -147,10 +237,10 @@ class Dialogs:
 		dlg.cbStyle.set_active(stl)
 		dlg.set_keep_above(True)
 
-	def hideDlgPref(it, update=False):
-		dlg = it.dlgPreferences
-		if dlg and(dlg.get_property("visible")):
-			it.dlgPrefPos = dlg.get_position()
+	def dlgHide(it, update=False):
+		if it.is_visible():
+			dlg = it.dlg
+			it.pos = dlg.get_position()
 			if update:
 				it.League = dlg.eLeague.get_text()
 				it.ModName = dlg.eModName.get_text()
@@ -164,177 +254,216 @@ class Dialogs:
 					it.PreferencesStore()
 			dlg.hide()
 
+	go_PrefOK     = lambda it, b: it.dlgHide(update=True)
+	go_PrefCancel = lambda it, b: it.dlgHide()
+
 
 class mySinker_UI:
-	def __init__(ui):
-		ui.fontDesc = pango.FontDescription('Univers,Sans Condensed 7')
-		ui.fontColDesc = pango.FontDescription('Univers Condensed CE 9')
-		ui.fontFixedDesc = pango.FontDescription('Terminus,Monospace Bold 7')
-		ui.uiInit()
-		ui.createTxtTags()
+	def __init__(ui, py_fn=''):
+		ui.fontDesc = Pango.FontDescription('Univers,Sans Condensed 7')
+		ui.fontColDesc = Pango.FontDescription('Univers Condensed CE 9')
+		ui.fontFixedDesc = Pango.FontDescription('Monospace Bold 7')
+		grt = Gtk.ResponseType
+		ui.rspns = dict(map(lambda s: (int(getattr(grt, s)), f"Gtk.ResponseType.{s}"), sorted(
+			filter(lambda a:a==a.upper() and(not(callable(getattr(grt, a)))), dir(grt)),
+			key = lambda s: int(getattr(grt, s)), reverse=True)))
+		ui.Init(py_fn=py_fn)
 		if __name__ == "__main__":
-			ui.mainWindow.connect("destroy", lambda w: gtk.main_quit())
-			ui.buttonExit.connect("clicked", lambda w: gtk.main_quit())
-			_p = ui.logView.insert_end
+			ui.bld.connect_signals(ui.Connections())
+			ui.mainWindow.connect("destroy", lambda w: Gtk.main_quit())
+			ui.buttQuit.connect("clicked", lambda w: Gtk.main_quit())
+			_p = ui._p
 			_p("Any logs appears here...\nThere's no any yet… \n")
-			ui.buttonConvert.connect("clicked", ui.test)
+			ui.buttConv.connect("clicked", ui.test)
 			for _attr in dir(ui.logView):
 				tatr = str(_attr)
 				if tatr[0:2] == "tg":
 					_p("\t%s\n" % tatr)
-			ui.uiEnter()
+			ui.Enter()
 
-	uiEnter = lambda ui: gtk.main()
-	uiExit = lambda ui: gtk.main_quit()
+	Enter = lambda ui: Gtk.main()
+	Exit = lambda ui: Gtk.main_quit()
+	Bind = lambda ui, w_nm, wgt=None:\
+		setattr(wgt, w_nm, ui.bld.get_object(w_nm)) if isinstance(wgt, Gtk.Widget)\
+		else setattr(ui, w_nm, ui.bld.get_object(w_nm))
+
+	def Binds(ui, s_bnds, wgt=None):
+		for w_nm in s_bnds.split():
+			ui.Bind(w_nm, wgt=wgt)
 
 	if __name__ == "__main__":
 		def test(ui, butt):
-			lv = ui.logView
-			_p = lv.insert_end
-			for txtslice, cTag in( ("Error in file:", 2), ("'", 0), ('/examplePath/exampleFile.filter', 1),("'\n", 0) ):
-				_p(txtslice, tag=(None, 'tgFileName', 'tgErr')[cTag])
-			insp_o = lv.tgFileName
-			_p("%s\n"% str(insp_o))
+			exampl_fn = '/examplePath/exampleFile.filter'
+			_p = ui._p
+			for txtslice, cTag in( ("Error in file:", 2), ("'", 0), (exampl_fn, 1),("'\n", 0) ):
+				_p(txtslice, tag=(None, 'tgFlNm', 'tg_Err')[cTag])
+			for txtslice, cTag in( ("Error in file:", 2), ("'", 0), (exampl_fn, 1),("'\n", 0) ):
+				_p(txtslice, tag=(None, 'fnm', 'err')[cTag])
+			for txtslice, cTag in( ("Error in file:", 2), ("'", 0), (exampl_fn, 1),("'\n", 0) ):
+				_p(txtslice, tag=(None, ui.tgFlNm, ui.tg_Err)[cTag])
+			insp_o = ui.tgFlNm
+			_p(f"{str(insp_o)}\n")
 			for _attr in dir(insp_o):
+				r_attr = getattr(insp_o, _attr)
 				tatr = str(_attr)
-				_p("\t%s\n" % tatr)
-			for txtslice, cTag in( ("Error in file:", 2), ("'", 0), ('/examplePath/exampleFile.filter', 1),("'\n", 0) ):
-				_p(txtslice, tag=(None, lv.tgFileName, lv.tgErr)[cTag])
+				if callable(r_attr):
+					_p("\t")
+					_p(f"{tatr}()", 'phr')
+					_p(f"\n")
+				else:
+					_p(f"\t{tatr}\n")
 
-	def uiInit(ui):
-		from os import path as ph
-		ui.runpath = ph.dirname(ph.realpath(__file__))
+	def Init(ui, py_fn=''):
+		if not(py_fn):
+			py_fn = ph.realpath(__file__)
+		ui.runpath = py_dn = ph.dirname(py_fn)
 		if __name__ == "__main__":
+			py_fn = py_fn.replace('uiMySinker', 'mySinker')
 			ui.cfg = {}
-		wg.Height = 25
-		ui.title = 'Path Of Exile Loot Filter Customize…'
-		ui.mainWindow = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		w, h, ui.hgtLower = (500, 400, wg.Height*(LO_ROWS+1))
-		ui.mainWindow.set_geometry_hints(min_width=w, min_height=h)
-		ui.mainWindow.set_size_request(w, h)
-		ui.mainWindow.set_title(ui.title)
-		ui.mainWindow.set_border_width(5)
-		ui.accGroup = gtk.AccelGroup()
-		ui.mainWindow.add_accel_group(ui.accGroup)
-		
-		mfm = ui.mnFx = gtk.Fixed()
-
-		ui.logView = wg.TextView(mfm, 5, 5, 0, 0,
-			bEditable=False, tabSpace=4, fontDesc = ui.fontFixedDesc)
-
-		ui.txtFN = u'Use „Open” button to browse *.filter file →'
-		from wgts import getTxtPixelWidth
-		ui.lw = 0
-		for select in lsFiles:
-			txtLabel = "%s File:" % select
-			lb = wg.Label(txtLabel, mfm, 0, 0, 60)
-			lw = getTxtPixelWidth(lb, txtLabel, fontDesc=ui.fontDesc)+5
-			ui.lw = max(ui.lw, lw)
-			lb.set_size_request(lw-2, wg.Height)
-			setattr(ui, 'labFilename' + select, lb)
-			if __name__ == "__main__":
-				print(u"Label „%s” size: %d" % (txtLabel, lw))
-				dsplFilename = wg.Butt(ui.txtFN, mfm, 0, 0, 0)
-			else:
-				dsplFilename = wg.Label(ui.txtFN,
-					mfm, 0, 0, 0, xalign=0., selectable=True)
-			setattr(ui, 'dsplFilename' + select, dsplFilename)
-			bt = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_OPEN) #"Set FileName..."
-			setattr(ui, 'buttonFileName' + select, bt)
-
-
-		ui.buttonLastRel = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_DIALOG_QUESTION)
-		ui.buttonLastRel.set_tooltip_text('Check latest Release')
-		ui.buttonUnZip = wg.Butt(None, mfm, 0, 0, 30, fileImage=ph.join(ph.dirname(ph.abspath(__file__)), 'ico/package.svg'))
-		ui.buttonConvert = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_CONVERT) #"Proceed..."
-		ui.buttonDiff = wg.Butt("Diff", mfm, 0,  0, 50)
-
-		ui.chkDbg = wg.Check("Debug", mfm, 0,  0, 50)
-
-		ui.toggWrap = wg.Toggle("Wrap words", mfm, 0,  0, 70)
-
-		ui.buttonPreferences = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_PREFERENCES)
-
-		ui.buttonClear = wg.Butt("Clear", mfm, 0,  0, 50)
-
-		ui.buttonExit = wg.Butt("Exit (Ctrl+Q)", mfm, 0, 0, 80)
-		ui.buttonExit.add_accelerator("clicked", ui.accGroup, ord('Q'),
-			gtk.gdk.CONTROL_MASK, gtk.ACCEL_VISIBLE)
-
-		ui.mainWindow.add(mfm)
+		ui.bld = Gtk.Builder()
+		ui_fn = ph.join(py_dn, f"{ph.basename(py_fn).rsplit('.', 1)[0]}.ui")
+		ui.bld.add_from_file(ui_fn)
+		print(f"UI Filename:„{ui_fn}”")
+		ui.Binds('mainWindow logView buttLastRel buttUnZip buttConv buttDiff '\
+			'chkDbg buttPreferences toggWrap buttClear buttQuit '\
+			'dsplZipFN dsplInFN dsplOutFN dlgOpts dlgGetFN dlgSrch')
 		ui.mainWindow.show_all()
 		ui.mainWindow.set_keep_above(True)
-		ui.lastWinSize = None
-		ui.buttonClear.connect("clicked", lambda xargs: ui.logView.clear_text())
-		ui.mainWindow.connect("configure-event", ui.uiSize)
-		ui.toggWrap.connect("toggled", ui.appWrap)
-		
-		ui.poeFilter = gtk.FileFilter()
+		global _l, _lp
+		_l, _lp = ui._p, ui._lp
+		ui.createTxtTags()
+
+		ui.poeFilter = Gtk.FileFilter()
 		ui.poeFilter.set_name("PoE item filter script (*.filter)")
 		ui.poeFilter.add_pattern("*.filter")
 		
-		ui.poeFilterZip = gtk.FileFilter()
+		ui.poeFilterZip = Gtk.FileFilter()
 		ui.poeFilterZip.set_name("PoE item filter pack by NeverSink (*.zip)")
 		ui.poeFilterZip.add_pattern("*.zip")
+		ui.txtFN = u'Use „Open” button to browse *.filter file →'
 
-		ui.dlgs = Dialogs(ui, ui.mainWindow)
+		for ui_attr in dDialogs.keys():
+			g = globals()
+			dlg_route = dDialogs[ui_attr]
+			setattr(ui, ui_attr, g[dlg_route](ui))
+
+	def Connections(ui):
+		handlers = {}
+		for ui_attr in dDialogs.keys():
+			handlers.update( getattr(ui, ui_attr).Connections('dg_') )
+		for hn in (dr[3:] for dr in dir(ui) if dr[:3]=='go_'):
+			handlers[f"ui_{hn}"] = getattr(ui, f"go_{hn}")
+		return handlers
 
 	def createTxtTags(ui):
-		lv = ui.logView
-		lb = lv.get_buffer()
-		lv.tgFileName = lb.create_tag('filename', weight = pango.WEIGHT_BOLD, foreground = 'yellow')
-		lv.tgPhrase = lb.create_tag('phrase', weight = pango.WEIGHT_BOLD, foreground = 'orange')
-		lv.tgWarn = lb.create_tag('warning', weight = pango.WEIGHT_BOLD, foreground = '#FD0')
-		lv.tgErr = lb.create_tag('error', weight = pango.WEIGHT_BOLD, foreground = 'red')
-		lv.tgEnum = lb.create_tag('line_number', weight = pango.WEIGHT_BOLD, foreground = '#0F0')
+		logBuff = ui.logView.get_buffer()
+		_B = Pango.Weight.BOLD
+		ui.tgFlNm = logBuff.create_tag('fnm', weight = _B)
+		ui.tgYllw = logBuff.create_tag('ylw', weight = _B)
+		ui.tgPhrs = logBuff.create_tag('phr', weight = _B)
+		ui.tg_Err = logBuff.create_tag('err', weight = _B)
+		ui.tgWarn = logBuff.create_tag('wrn', weight = _B)
+		ui.tgEnum = logBuff.create_tag('num', weight = _B)
+		ui.tgSmrf = logBuff.create_tag('srf', weight = _B)
+		for color_cfg, color_val in(
+			('fgFlNm', 'yellow'),
+			('fgYllw', '#FF5'),
+			('fgPhrs', 'orange'), ('bgPhrs', '#002818'),
+			('fg_Err', 'red'),
+			('fgEnum', '#0F0'),
+			('fgWarn', '#F85'),
+			('fgSmrf', '#25E'),):
+			tag_name = color_cfg.replace('bg', 'tg').replace('fg', 'tg')
+			color = Gdk.color_parse(color_val)
+			prop_name = {'bg': 'background-gdk', 'fg': 'foreground-gdk'}[color_cfg[0:2]]
+			getattr(ui, tag_name).set_property(prop_name, color)
 
-	def uiSize(ui, window, event):
-		if event.type==wg.gtk.gdk.CONFIGURE:
-			w, h = event.width, event.height
-			if ui.lastWinSize==(w, h):
-				return True
-			ui.lastWinSize = w, h
-			wgH = wg.Height
-			mfm = ui.mnFx
-			ha = h - ui.hgtLower - 10
-			ui.logView.size(w-20, ha)
-			y = ha + 10
-			lw = ui.lw
-			for select in lsFiles:
-				labFilename = getattr(ui, 'labFilename' + select)
-				mfm.move(labFilename, 0, y)
-				dsplFilename = getattr(ui, 'dsplFilename' + select)
-				dsplFilename.size(w-50-lw, wgH)
-				mfm.move(dsplFilename, lw, y)
-				bt = getattr(ui, 'buttonFileName' + select)
-				mfm.move(bt, w-45, y)
-				y += wg.Height+5
-			mfm.move(ui.buttonLastRel, 0, y)
-			mfm.move(ui.buttonUnZip, 35, y)
-			mfm.move(ui.buttonConvert, 70, y)
-			mfm.move(ui.buttonDiff, 105, y)
-			mfm.move(ui.chkDbg, 160, y)
-			mfm.move(ui.buttonPreferences, w-270, y)
-			mfm.move(ui.toggWrap, w-225, y)
-			mfm.move(ui.buttonClear, w-150, y)
-			mfm.move(ui.buttonExit, w-95, y)
-			return True
+	go_Clear = lambda ui, *args: ui.logView.get_buffer().set_text('')
+	go_Wrap = lambda ui, widget: ui.logView.set_wrap_mode((Gtk.WrapMode.NONE, Gtk.WrapMode.WORD)[widget.get_active()])
 
-	def appWrap(ui, widget):
-		ui.logView.set_wrap_mode((gtk.WRAP_NONE, gtk.WRAP_WORD)[widget.get_active()])
+	def go_SrchLog(ui, b):
+		sVis = not(ui.dlgSrch.is_visible())
+		ui.srch.dlgShow() if sVis else ui.srch.dlgHide()
+
+	def go_PhraseIcons(ui, ed, icoPos, sigEvent):
+		if icoPos == Gtk.EntryIconPosition.SECONDARY:
+			ed.set_text('')
+
+	def _p(ui, txt, tag=None, short_path=False):
+		buff = ui.logView.get_buffer()
+		end = buff.get_end_iter()
+		text = hh(txt) if short_path else txt
+		if tag and(isinstance(tag, str)):
+			tagTab = buff.get_tag_table()
+			tagByNm = tagTab.lookup(tag)
+			if tagByNm:
+				tag = tagByNm
+			elif hasattr(ui, tag):
+				tag = getattr(ui, tag)
+			else:
+				tag = None
+		if not(isinstance(tag, Gtk.TextTag)):
+			buff.insert(end, text)
+			return
+		buff.insert_with_tags(end, text, tag)
+
+	def _lp(ui, ls_txt, short_path=True):
+		for idx, txt_obj in enumerate(ls_txt):
+			if isinstance(txt_obj, str):
+				ui._p(txt_obj, short_path=short_path)
+			elif isinstance(txt_obj, tuple) and len(txt_obj)==2:
+				ui._p(txt_obj[0], tag=txt_obj[1], short_path=short_path)
+			else:
+				raise TypeError(f"Unknown format in {ls_txt}[{idx}]")
 
 	def restoreGeometry(ui):
-		if hasattr(ui, 'dlgs') and(ui.cfg['dlgPrefPos']):
-			ui.dlgs.dlgPrefPos =  tuple(map(lambda k: int(k), ui.cfg['dlgPrefPos'].split(',')))
-		ui.rGeo(ui.mainWindow, 'MainWindowGeometry')
+		for ui_attr in dDialogs.keys():
+			dlg_cfg_nm = f"dlg{ui_attr.capitalize()}Pos"
+			if hasattr(ui, ui_attr) and(ui.cfg[dlg_cfg_nm]):
+				dlg_inst = getattr(ui, ui_attr)
+				dlg_inst.pos =  tuple(int(k) for k in ui.cfg[dlg_cfg_nm].split(','))
+		ui.setTxtWinGeometry(ui.mainWindow, ui.cfg['MainWindowGeometry'])
 
 	def storeGeometry(ui):
-		if hasattr(ui, 'dlgs'):
-			dlgs = ui.dlgs
-			dlgs.hideDlgPref()
-			if dlgs.dlgPrefPos:
-				ui.cfg['dlgPrefPos'] = "%i,%i" % dlgs.dlgPrefPos
-		ui.cfg['MainWindowGeometry'] = ui.sGeo(ui.mainWindow)
+		for ui_attr in dDialogs.keys():
+			if hasattr(ui, ui_attr):
+				dlg_inst, dlg_cfg_nm = getattr(ui, ui_attr), f"dlg{ui_attr.capitalize()}Pos"
+				if hasattr(dlg_inst, 'dlgHide'): dlg_inst.dlgHide()
+				if dlg_inst.pos:
+					x, y = dlg_inst.pos
+					ui.cfg[dlg_cfg_nm] = f"{x:d},{y:d}"
+		ui.cfg['MainWindowGeometry'] = ui.getTxtWinGeometry(ui.mainWindow)
+
+
+	def getWinGeometry(ui, win):
+		pos = win.get_position()
+		size = win.get_size()
+		return pos.root_x, pos.root_y, size.width, size.height
+
+	def getTxtWinGeometry(ui, win):
+		geo = ui.getWinGeometry(win)
+		txtGeo = ','.join(map(lambda i: f"{i}", geo))
+		dlgName = win.get_title()
+		_d(f"Current Window „{dlgName}” geometry: {txtGeo}\n")
+		return txtGeo
+
+	def setWinGeometry_timed(ui, win, geo):
+		_d(f"Repositioning Window: „{win.get_title()}” to:\n")
+		_d(f"pos: x:{geo[0]}, y:{ geo[1]}\n")
+		_d(f"size: w:{geo[2]}, h:{geo[3]}\n")
+		gdw = win.get_window()
+		gdw.move_resize(*geo)
+		return False # run only once
+
+	def setWinGeometry(ui, win, geo):
+		addIdle(ui.setWinGeometry_timed, win, geo)
+
+	def setTxtWinGeometry(ui, win, txtGeo):
+		geo = tuple(map(int, txtGeo.split(','))) if txtGeo else tuple()
+		if len(geo)==4:
+			ui.setWinGeometry(win, geo)
+		else:
+			_d(f"Strange geo situation:{geo}\n")
 
 # Entry point
 if __name__ == "__main__":
