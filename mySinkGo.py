@@ -15,7 +15,8 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 		return
 	def tfs(slice_, old, new, noMatchErr=False):
 			for rule in slice_:
-				rule.tuneFontSize(old, new, noMatchErr)
+				if isinstance(rule, Rule):
+					rule.tuneFontSize(old, new, noMatchErr)
 	###############################################################################################################################
 	#Oni-Goroshi Farm
 	sect = inFS.getSectionById(100, "Global overriding rules")
