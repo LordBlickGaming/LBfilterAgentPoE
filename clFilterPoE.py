@@ -1094,12 +1094,10 @@ class MinorList(xlist):
 
 	def load(it, headLines, bodyLines, lnFileIdxSect):
 		it.headlines = headLines
-		it.Id = 1
-		it.name = 'ToC'
 		it.replace(bodyLines)
-		_d( (f" Found {it.name}",) )
+		_d( ((f"  {lnFileIdxSect+1:4d}: ", 'num'), f" Found ", (f"{it.name: ^18}", 'srf')) )
 		cHds = len(headLines)
-		_d( ("; headlines:", (f"{cHds:4d}", 'num')) )
+		_d( (": headlines:", (f"{cHds:4d}", 'num')) )
 		lnFileIdxSectBody = lnFileIdxSect + cHds
 		cLns = len(bodyLines)
 		_d( ("; bodylines:", (f"{cLns:4d}", 'num'), ", last one:",
@@ -1241,6 +1239,7 @@ class nvrsnkSections(Element):
 			sect.regen_headlines(it.ToC)
 		txt_st  = it.Head._st()
 		txt_st += it.ToC._st()
+		txt_st += _n # No idea why we lose empty line after ToC but not after Head
 		for child in it:
 			txt_st += child._st()
 		return txt_st
