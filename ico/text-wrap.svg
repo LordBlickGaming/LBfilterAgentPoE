@@ -7,7 +7,7 @@
    version="1.1"
    id="svg10"
    sodipodi:docname="text-wrap.svg"
-   inkscape:version="1.1.1 (3bf5ae0d25, 2021-09-20, custom)"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
@@ -24,20 +24,20 @@
      inkscape:pagecheckerboard="1"
      showgrid="false"
      inkscape:zoom="18.6875"
-     inkscape:cx="10.354515"
+     inkscape:cx="15.973244"
      inkscape:cy="6.5551839"
      inkscape:window-width="1278"
      inkscape:window-height="1080"
-     inkscape:window-x="-47"
-     inkscape:window-y="1088"
+     inkscape:window-x="437"
+     inkscape:window-y="1042"
      inkscape:window-maximized="0"
-     inkscape:current-layer="layer2" />
+     inkscape:current-layer="g964" />
   <g
      inkscape:groupmode="layer"
      id="layer2"
      inkscape:label="Background">
     <rect
-       style="fill:#4354ca;fill-opacity:1;stroke:none;stroke-width:1.13386"
+       style="fill:#007adf;fill-opacity:1;stroke:none;stroke-width:1.13386"
        id="rect57"
        width="20"
        height="20"
@@ -52,7 +52,7 @@
      inkscape:label="Draw">
     <g
        id="g2124"
-       transform="translate(0.39972195,0.0385482)">
+       transform="translate(0.39972195,0.2385097)">
       <g
          id="g964">
         <path
@@ -62,7 +62,7 @@
            stroke-linecap="round"
            stroke-linejoin="round"
            id="path2"
-           style="stroke:#000000;stroke-opacity:0.5" />
+           style="stroke:#ffffff;stroke-opacity:0.5" />
         <path
            d="m 3.6002781,16.08649 h 5"
            stroke="currentColor"
@@ -70,7 +70,7 @@
            stroke-linecap="round"
            stroke-linejoin="round"
            id="path4"
-           style="stroke:#000000;stroke-opacity:0.5" />
+           style="stroke:#ffffff;stroke-opacity:0.5" />
       </g>
       <g
          id="g960">
@@ -81,7 +81,7 @@
            stroke-linecap="round"
            stroke-linejoin="round"
            id="path6"
-           style="stroke-width:2;stroke-miterlimit:4;stroke-dasharray:none" />
+           style="stroke-width:2;stroke-miterlimit:4;stroke-dasharray:none;stroke:#ffffff;stroke-opacity:1" />
         <path
            d="m 14.600278,14.58649 -2.5,1.5 2.5,1.5 z"
            stroke="currentColor"
@@ -89,7 +89,7 @@
            stroke-linecap="round"
            stroke-linejoin="round"
            id="path8"
-           style="stroke-width:2;stroke-miterlimit:4;stroke-dasharray:none" />
+           style="stroke-width:2;stroke-miterlimit:4;stroke-dasharray:none;stroke:#ffffff;stroke-opacity:1" />
       </g>
     </g>
   </g>

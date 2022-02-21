@@ -38,15 +38,6 @@ def _d(_str):
 	if dbg: sto.write(str(_str))
 
 class xlist(list):
-	def clear(it):
-		l = it.__len__()
-		if not(l):
-			return
-		elif l==1:
-			it.pop()
-			return
-		it.__delslice__(0, l)
-
 	def replace(it, iterable):
 		it.clear()
 		it.extend(iterable)

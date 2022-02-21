@@ -7,10 +7,10 @@
 
 from clFilterPoE import nvrsnkSections, Rule, _dv, _range
 
-def sinkConvert(fn_in, fn_out, dbg, _p, _d):
+def sinkConvert(in_fn, out_fn, dbg, _p, _d):
 	inFS = nvrsnkSections(logger=_p, debug=dbg)
 	ssUp = ( (6002, 'Hide All known Section'), (4804, 'Show All unknown Section') )
-	inFS.load(fn_in, ssPromotes=ssUp)
+	inFS.load(in_fn, ssPromotes=ssUp)
 	if not(inFS.load_fn):
 		return
 	def tfs(slice_, old, new, noMatchErr=False):
@@ -24,6 +24,7 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 		txtRule = '\nShow # Goldrim chance base on Twilight Strand\n'
 		txtRule += 'Class "Helmets"\nBaseType "Leather Cap"\n'
 		txtRule += 'Rarity Normal\n'
+		txtRule += 'AreaLevel < 3\n'
 		txtRule += 'ItemLevel 3\n'
 		txtRule += 'SetFontSize 40\n'
 		txtRule += 'SetTextColor 255 255 255\n'
@@ -50,7 +51,7 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 		acquired = newRule.load(linesRule)
 		opDiv.insert(1, newRule)
 	#manipulate chisel recipe
-	ssect = inFS.getSubsecttionById(1000, 1006, "Chisel Recipes")
+	ssect = inFS.getSubsecttionById(1000, 1007, "Chisel Recipes")
 	if ssect:
 		rules = ssect[0].rules()
 		if len(rules):
@@ -101,24 +102,24 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 	'''
 	inFS.tuneSectionFontById(45, , "", )
 	'''
+	inFS.tuneSectionFontById( 45, 35, 3400, "Currency - Exceptions - Leveling Currencies")
 	ssect = inFS.getSubsecttionById(3500, 4702, "Supplies: High Stacking") #funny mistake of someone
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$tier->t2")
 		ssect.tuneFontByCmt(45, 40, "$tier->t3")
-	ssect = inFS.getSubsecttionById(3500, 3501, "Supplies: Low Stacking")
+	ssect = inFS.getSubsecttionById(3500, 3502, "Supplies: Low Stacking")
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$tier->t2")
 		ssect.tuneFontByCmt(45, 40, "$tier->t3")
-	ssect = inFS.getSubsecttionById(3500, 3502, "Supplies: Portal Stacking")
+	ssect = inFS.getSubsecttionById(3500, 3503, "Supplies: Portal Stacking")
 	if ssect:
 		ssect.tuneFontByCmt(45, 40, "$tier->t2")
 		ssect.tuneFontByCmt(40, 35, "$tier->t3")
-	ssect = inFS.getSubsecttionById(3500, 3503, "Supplies: Wisdom Stacking")
+	ssect = inFS.getSubsecttionById(3500, 3504, "Supplies: Wisdom Stacking")
 	if ssect:
 		ssect.tuneFontByCmt(45, 40, "$tier->t2")
 		ssect.tuneFontByCmt(40, 35, "$tier->t3")
-	inFS.tuneSubsectionFontByIdDiv0(45, 38, 3500, 3507, "Heist Coins")
-	#inFS.tuneSectionFontById( 45, 35, 3400, "Currency - Exceptions - Leveling Currencies")
+	inFS.tuneSubsectionFontByIdDiv0(45, 38, 3500, 3508, "Heist Coins")
 	sect = inFS.getSectionById(3600, "Currency - Regular Currency Tiering")
 	if sect:
 		ssect = sect[0]
@@ -134,50 +135,45 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 		#  "Scroll of Wisdom"
 		ssect.tuneFontByCmt(40, 32, "$tier->twisdom")
 		# bye bye Silver Coin…
-	ssect = inFS.getSubsecttionById(3700, 3702, "Delve - Resonators")
+	ssect = inFS.getSubsecttionById(3700, 3703, "Delve - Resonators")
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$type->currency->resonator $tier->t1")
 		ssect.tuneFontByCmt(45, 40, "$type->currency->resonator $tier->t2")
-		#rule_cm = "$type->currency->resonator $tier->t3"
-		#ssect.ruleOnByCmt(rule_cm)
-		#ssect.tuneFontByCmt(45, 38, rule_cm)
 		ssect.tuneFontByCmt(45, 38, " $type->currency->resonator $tier->restex")
-	#ssect = inFS.getSubsecttionById(4900, 4905, "Delirium Currency")
-	ssect = inFS.getSubsecttionById(3700, 3703, "Delve - Fossils")
+	ssect = inFS.getSubsecttionById(3700, 3704, "Delve - Fossils")
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$type->currency->fossil $tier->t2")
 		ssect.tuneFontByCmt(45, 40, "$type->currency->fossil $tier->t3")
 		ssect.tuneFontByCmt(45, 38, "$type->currency->fossil $tier->t4")
 		ssect.tuneFontByCmt(45, 36, " $type->currency->fossil $tier->restex")
-	ssect = inFS.getSubsecttionById(3700, 3704, "Blight - Oils")
+	ssect = inFS.getSubsecttionById(3700, 3705, "Blight - Oils")
 	if ssect:
 		#ssect.ruleOnByCmt(          "$type->currency->oil $tier->t1")
 		ssect.tuneFontByCmt(45, 42, "$type->currency->oil $tier->t2")
 		ssect.tuneFontByCmt(45, 40, "$type->currency->oil $tier->t3")
 		ssect.tuneFontByCmt(45, 38, "$type->currency->oil $tier->t4")
 		ssect.tuneFontByCmt(45, 36, "$type->currency->oil $tier->restex")
-	ssect = inFS.getSubsecttionById(3700, 3705, "Expedition Currencies")
-	ssect = inFS.getSubsecttionById(3700, 3706, "Essences")
+	ssect = inFS.getSubsecttionById(3700, 3706, "Expedition Currencies")
+	ssect = inFS.getSubsecttionById(3700, 3707, "Essences")
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$type->currency->essence $tier->t2")
 		ssect.tuneFontByCmt(45, 40, "$type->currency->essence $tier->t3")
 		ssect.tuneFontByCmt(45, 38, "$type->currency->essence $tier->t4")
 		ssect.tuneFontByCmt(45, 36, "$type->currency->essence $tier->t5")
 		ssect.tuneFontByCmt(45, 34, "$type->currency->essence $tier->t6")
-	ssect = inFS.getSubsecttionById(3700, 3707, "Incubators")
+	ssect = inFS.getSubsecttionById(3700, 3708, "Incubators")
 	if ssect:
 		#ssect.ruleOnByCmt(          "$type->currency->incubators $tier->t1")
 		ssect.tuneFontByCmt(45, 42, "$type->currency->incubators $tier->t2")
 		ssect.tuneFontByCmt(45, 40, "$type->currency->incubators $tier->t3")
 		ssect.tuneFontByCmt(45, 38, "$type->currency->incubators $tier->t4")
 		ssect.tuneFontByCmt(45, 36, "$type->currency->incubators $tier->restex")
-	#ssect = inFS.getSubsecttionById(3700, 3708, "Archnemesis Mods") Somebody misses new secton
 	if ssect:
 		#ssect.ruleOnByCmt(          "$type->exotic->archnemesis $tier->reagents")
 		ssect.tuneFontByCmt(45, 42, "$type->exotic->archnemesis $tier->special")
 		ssect.tuneFontByCmt(45, 40, "$type->exotic->archnemesis $tier->results")
 		ssect.tuneFontByCmt(45, 38, "$type->exotic->archnemesis $tier->restex")
-	ssect = inFS.getSubsecttionById(3700, 3708, "Others")
+	ssect = inFS.getSubsecttionById(3700, 3709, "Others")
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$type->currency->others $tier->harbinger")
 		ssect.tuneFontByCmt(45, 42, "$type->currency->others $tier->misc")
@@ -185,7 +181,7 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$type->currency->splinter $tier->t2")
 		ssect.tuneFontByCmt(40, 38, "$type->currency->splinter $tier->t3")
-	ssect = inFS.getSubsecttionById(3800, 3801, "Simulacrum Splinters")
+	ssect = inFS.getSubsecttionById(3800, 3802, "Simulacrum Splinters")
 	if ssect:
 		ssect.tuneFontByCmt(45, 42, "$type->currency->splinter->simulacrum $tier->t2")
 		ssect.tuneFontByCmt(45, 42, "$type->currency->splinter->simulacrum $tier->t3")
@@ -202,8 +198,6 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 		ssect.tuneFontByCmt(35, 38, "%H1 $type->divination $tier->t5")
 		ssect.tuneFontByCmt(45, 36, "$type->divination $tier->restex")
 
-	#sect = inFS.getSecttionById(4500, "Hide outdated flasks")
-	#show highest tiers of mana/life flasks
 	ssect = inFS.getSubsecttionById(4600, 6002, "Utility Flasks")
 	if ssect:
 		for rule in ssect[0]:
@@ -212,12 +206,29 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 				rule.Actions.del_cmd('PlayEffect')
 				rule.Actions.del_cmd('MinimapIcon')
 		ssect.tuneFontByCmt(45, 40, "$type->leveling->flasks->utility $tier->quicksilver")
-	inFS.tuneSectionFontByIdDiv0( 45, 42, 5700, "Quest Items and Event Items")
-	dv = inFS.getSectionByIdDiv0(6000, "Leveling - Merged Rules")
-	if dv:
-		dv.tuneFontSize(45, 35, True)
-		for rule in dv:
-			rule.Actions.del_cmd('PlayAlertSound')
+	ssect = inFS.getSubsecttionById(4600, 4603, "Life flasks")
+	if ssect:
+		ssect.tuneFontSize(40, 35)
+		rules = ssect.srch_rule_comments("$type->leveling->flasks->life $tier->t11")
+		if rules:
+			rules[0].del_cond('AreaLevel')
+		rules = ssect.srch_rule_comments("$type->leveling->flasks->life $tier->t12")
+		if rules:
+			rules[0].del_cond('AreaLevel')
+	ssect = inFS.getSubsecttionById(4600, 4604, "Mana flasks")
+	if ssect:
+		ssect.tuneFontSize(40, 35)
+	ssect = inFS.getSubsecttionById(4800, 4801, "Purpose Picked Items")
+	if ssect:
+		ssect.tuneFontByCmt(45, 38, "$type->leveling->normalmagic->4l $tier->general")
+		ssect.tuneFontByCmt(45, 38, "$type->leveling->normalmagic->rgb $tier->rgbsmall1")
+		ssect.tuneFontByCmt(45, 38, "$type->leveling->normalmagic->rgb $tier->rgbsmall2")
+		rules = ssect.srch_rule_comments("$type->leveling->normalmagic->rgb $tier->rgblarge")
+		if rules:
+			rules[0].tuneFontSize(40, 35)
+			rules[0].new_cond_args('AreaLevel_Hi', ('<=', '67'), 41, ' No respect for huge chromatic orb on maps')
+		ssect.tuneFontByCmt(40, 35, "$type->leveling->normalmagic->rgb $tier->rgbmedium")
+		ssect.tuneFontByCmt(40, 35, "$type->leveling->normalmagic->3l $tier->earlythreelinks")
 	dv = inFS.getSectionByIdDiv0(6100, "Leveling - RGB Recipes")
 	if dv:
 		tfs(dv[0:2], 45, 40)
@@ -225,7 +236,6 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 		w = dv[1].get_cond_args('Width_Hi')
 		if w==('<=', '1'):
 			dv[1].replace_cond_args('Width_Hi', ('1',))
-		dv[2].new_cond_args('AreaLevel_Hi', ('<=', '67'), 41, ' No respect for huge chromatic orb on maps')
 	dv = inFS.getSubsectionByIdDiv0(6200, 6201, "Leveling rares - specific items")
 	if dv:
 		dv.tuneFontSize(45, 34, True)
@@ -249,7 +259,6 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 		dv[1].tuneFontSize(40, 32, True)
 	inFS.tuneSubsectionFontByIdDiv0(36, 32, 6200, 6207, "Leveling rares - remaining rules")
 	#lower Font Size of unsorted by level 4L
-	#ssect = inFS.getSubsecttionById(6300, 6301, "Linked gear - 4links")
 	dv = inFS.getSubsectionByIdDiv0(6300, 6301, "Linked gear - 4links")
 	if dv:
 		dv.tuneFontSize(45, 36, True)
@@ -328,4 +337,4 @@ def sinkConvert(fn_in, fn_out, dbg, _p, _d):
 					if rule.get_cond_args('LinkedSockets_Hi')[-1]=='4':
 						rule.Actions.del_cmd('PlayAlertSound')
 	############################################################################################################################################
-	inFS.store(fn_out)
+	inFS.store(out_fn)

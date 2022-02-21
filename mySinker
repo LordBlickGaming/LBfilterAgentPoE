@@ -196,6 +196,7 @@ class mySinker:
 			else:
 				lsCheck.append(ph.isfile(cfgPath))
 		ui.buttConv.set_sensitive(all(lsCheck))
+		ui.buttNumFix.set_sensitive(all(lsCheck))
 		zcfg = mn.cfg['Main'][cfgFiles('Zip')]
 		icfg = mn.cfg['Main'][cfgFiles('In')]
 		bUnZip = zcfg and(icfg) and(ph.isfile(zcfg)) and(ph.isdir(ph.dirname((icfg))))
@@ -303,14 +304,33 @@ class mySinker:
 			_lp( ("Zip file:„", (zip_fn, 'fnm'), "” unpacked to:\n",
 				"    „", (unzipped_fn, 'fnm'), "”\n") )
 
+	def go_NumFix(mn, b):
+		in_fn = mn.cfg['Main']['InFN']
+		if not(in_fn):
+			_l("Error: Select proper input filename!\n", 'err')
+			return
+		if (not(ph.isfile(in_fn))):
+			_lp( (("Error: Selected input filename „", 'err'), (hh(in_fn), 'fnm'),
+				("” does not exist!\n", 'err')) )
+			return
+		out_fn = '-fix.'.join(in_fn.rsplit('.', 1))
+		from clFilterPoE import nvrsnkSections
+		inFS = nvrsnkSections(logger=_lp, debug=mn.dbg)
+		inFS.load(in_fn)
+		if not(inFS.load_fn):
+			return
+		inFS.store(out_fn)
+		mn.appDiff(in_fn, out_fn, "Sink-fix.diff")
+
 	def go_Convert(mn, b):
 		from mySinkGo import sinkConvert
 		sinkConvert(mn.cfg['Main']['InFN'], mn.cfg['Main']['OutFN'], mn.dbg, _lp, _d)
 
 	def go_Diff(mn, b):
+		mn.appDiff(mn.cfg['Main']['InFN'], mn.cfg['Main']['OutFN'], "Sink.diff")
+
+	def appDiff(mn, old_fn, new_fn, diff_bn):
 		from difflib import unified_diff as diffu
-		old_fn = mn.cfg['Main']['InFN']
-		new_fn = mn.cfg['Main']['OutFN']
 		_l("Differences:\n")
 		if not(old_fn) or(not(new_fn)):
 			_l("– no both filenames set\n ")
@@ -320,7 +340,7 @@ class mySinker:
 		if cmph:
 			cmph += ph.sep
 		dn = ph.dirname(old_fn)
-		diff_fn = ph.join(dn, "Sink.diff")
+		diff_fn = ph.join(dn, diff_bn)
 		old_ld = new_ld = ''
 		def get_ld(fn):
 			with open(fn, 'r') as fd:
@@ -339,7 +359,8 @@ class mySinker:
 		diff_dt += '\n'
 		with open(diff_fn, 'w') as fd:
 			fd.write(diff_dt)
-		_lp( ((diff4u[0], 'err'), '\n', (diff4u[1], 'num'), ('\n[...]\n', 'srf')) )
+		_lp( ((diff4u[0], 'err'), '\n', (diff4u[1], 'num'), ("\n[...] all in file:„", 'srf'),
+			(diff_fn, 'fnm'), ("”\n", 'srf')) )
 
 	def appCfgLoad(mn, restoreGeo=True):
 		ui = mn.ui

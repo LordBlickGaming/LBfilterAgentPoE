@@ -324,7 +324,7 @@ class mySinker_UI:
 		ui_fn = ph.join(py_dn, f"{ph.basename(py_fn).rsplit('.', 1)[0]}.ui")
 		ui.bld.add_from_file(ui_fn)
 		print(f"UI Filename:„{ui_fn}”")
-		ui.Binds('mainWindow logView buttLastRel buttUnZip buttConv buttDiff '\
+		ui.Binds('mainWindow logView buttLastRel buttUnZip buttNumFix buttConv buttDiff '\
 			'chkDbg buttPreferences toggWrap buttClear buttQuit '\
 			'dsplZipFN dsplInFN dsplOutFN dlgOpts dlgGetFN dlgSrch')
 		ui.mainWindow.show_all()

@@ -12,12 +12,10 @@ _n = '\n'
 compares = "< > = <= >= <>".split()
 reCompares = re.compile(r"^(?:(?:"+r')|(?:'.join(compares)+r"))$", re.U)
 
-#reLstCmpSock = re.compile(r"^(?:(?:"+r')|(?:'.join(compares)+r"))$", re.U)
 reLstCmpSock = re.compile(r"^[1-6][ADRGBW]{1,6}$", re.U)
 
 reSectionDeco = re.compile(r"^\s*#\s*\={5,}", re.U)
 reSegDeco = re.compile(r"^\s*#\s*\-{5,}", re.U)
-#reScSgHdExpand = re.compile(r"^\s*#\s*[^=-]+$", re.U)
 reScSgHdExpand = re.compile(r"^\s*#\s*.+$", re.U)
 
 reHead = re.compile(r"^\s*#\s*.*Loot\s+Filter.*$", re.U)
@@ -728,16 +726,9 @@ class Element(xlist):
 				return True
 		return False
 
-	def _st_headlines(it):
-		if it.headlines:
-			return
-		return ''
-
 	def _st(it):
 		txt_st = ''
 		if it.headlines:
-			if hasattr(it, 'regen_headlines'):
-				it.regen_headlines()
 			txt_st += f"{_n.join(it.headlines)}{_n}"
 		for child in it:
 			txt_st += child._st()
@@ -815,7 +806,6 @@ class Division(Element):
 		bGotHead = True
 		if not(headLines):
 			bGotHead = False
-			#it.name is ''
 			_d( (" Assuming default, no name Division",) )
 		elif reDiv.match(headLines[0]):
 			sGS = reDiv.search(headLines[0])
@@ -954,12 +944,14 @@ class Subsection(Element):
 			defaultDiv.load((), bodyLines, it.sectName, it.Id, lnFileIdxSubBody)
 			it.append(defaultDiv)
 
-	def regen_headlines(it):
+	def regen_headlines(it, ls_toc):
 		if it.headlines:
 			if len(it.headlines)>2:
 				if reSubSect.match(it.headlines[1]):
 					it.headlines[1] = subSubSect.sub(
 						f"\g<before_ssectID>{it.Id:04d}\g<after_ssectID>", it.headlines[1])
+					hdr = it.headlines[1] = f"#  [{it.Id:04d}]  {it.name}"
+					ls_toc.append(hdr)
 
 	def tuneFontByBase(it, oldFS, newFS, txtBase, acCrgba=None):
 		dst = it.srch_rule_txtype(txtBase, True)
@@ -1006,15 +998,7 @@ class Section(Element):
 		startLine = lnFileIdxSect+1 # line no = ptr+1
 		_d( ((f"  {startLine:4d}: ", 'num'),) )
 		sGS = reGenSect.search(headLines[1])
-		if reHead.match(headLines[1]):
-			it.Id = 0
-			it.name = 'Head'
-			_d(" Found Head Section")
-		elif reTOC.match(headLines[1]):
-			it.Id = 1
-			it.name = 'ToC'
-			_d( (" Found Table Of Contents Section",) )
-		elif reThanks.match(headLines[1]):
+		if reThanks.match(headLines[1]):
 			it.Id = int(sGS.group('sectID'))
 			it.name = 'Thx'
 			_d( (" Found Thanks Section(id: ", (f"{it.Id:04d}", 'num')) )
@@ -1079,12 +1063,14 @@ class Section(Element):
 			defaultSubsect.load((), bodyLines, it, lnFileIdxSectBody)
 			it.append(defaultSubsect)
 
-	def regen_headlines(it):
+	def regen_headlines(it, ls_toc):
 		if it.headlines:
 			if len(it.headlines)>2:
 				if reGenSect.match(it.headlines[1]):
-					it.headlines[1] = subGenSect.sub(
-						f"\g<before_sectID>{it.Id:04d}\g<after_sectID>", it.headlines[1])
+					hdr = it.headlines[1] = f"# [[{it.Id:04d}]] {it.name}"
+					ls_toc.append(hdr)
+		for ssect in it:
+			ssect.regen_headlines(ls_toc)
 
 	def getSubsecttionByAllId(it, Id):
 		for idx, ssect in enumerate(it):
@@ -1101,7 +1087,45 @@ class Section(Element):
 	div = lambda it, num: it[0][num]
 	div0 = lambda it: it[0][0]
 
+class MinorList(xlist):
+	def __init__(it):
+		xlist.__init__(it)
+		it.headlines = ()
+
+	def load(it, headLines, bodyLines, lnFileIdxSect):
+		it.headlines = headLines
+		it.Id = 1
+		it.name = 'ToC'
+		it.replace(bodyLines)
+		_d( (f" Found {it.name}",) )
+		cHds = len(headLines)
+		_d( ("; headlines:", (f"{cHds:4d}", 'num')) )
+		lnFileIdxSectBody = lnFileIdxSect + cHds
+		cLns = len(bodyLines)
+		_d( ("; bodylines:", (f"{cLns:4d}", 'num'), ", last one:",
+			(f"{lnFileIdxSectBody+cLns:4d}\n", 'num')
+			) )
+
+	update = lambda it, bodyLines: it.replace(bodyLines)
+
+	def _st(it):
+		txt_st = ''
+		if it.headlines:
+			txt_st += f"{_n.join(it.headlines)}{_n}"
+		if it:
+			txt_st += f"{_n.join(it)}{_n}"
+		return txt_st
+
+class InfoHeader(MinorList):
+	Id = 0
+	name = 'Head Info'
+
+class TableOfContents(MinorList):
+	Id = 1
+	name = 'Table Of Contents'
+
 class nvrsnkSections(Element):
+	Id = None
 	STD_Debit = 2
 	def __init__(it, logger=None, debug=False):
 		Element.__init__(it)
@@ -1117,7 +1141,8 @@ class nvrsnkSections(Element):
 					else:# hope it's enough
 						_p(chnk[0]) # tag part irrelevant
 		_d = _l if debug else _dv
-		it.Id = None
+		it.Head = InfoHeader()
+		it.ToC = TableOfContents()
 
 	def load(it, load_fn, ssPromotes=tuple()):
 		global Data_pass
@@ -1137,9 +1162,6 @@ class nvrsnkSections(Element):
 		it.load_fn = load_fn
 		# Make Debit of empty lines
 		lines = [line.strip() for line in data.splitlines()]+['',]*it.STD_Debit
-		if data[-1]!='\n': lines.append('') # splitines loose last empty line
-		_d( (f"Last SplitLine: „{data.splitlines()[-1]}”\n",
-			f"Last Line: „{lines[-1]}”\n") )
 		cSkip = 0
 		lsLnIdx = []
 		cLns = len(lines)
@@ -1197,30 +1219,40 @@ class nvrsnkSections(Element):
 		cSect = len(lsLnIdx)
 		maxSect = cSect - 1
 		for idx, (lnFileIdxSctHd, cHdLns) in enumerate(lsLnIdx):
-			newSect = Section()
 			lnFileIdxSctBd = lnFileIdxSctHd + cHdLns
-			if idx<maxSect:# lnIdxNextHd = lsLnIdx[idx+1][0]
-				if reHead.match(lines[lnFileIdxSctHd+1]):
-					#lnFileIdxSctBd = lsLnIdx[idx+1][0]-1
-					lnFileIdxSctBd = lsLnIdx[idx+1][0]
-				newSect.load(lines[lnFileIdxSctHd:lnFileIdxSctBd], lines[lnFileIdxSctBd:lsLnIdx[idx+1][0]], lnFileIdxSctHd)
+			lnFileIdxSctBdEnd = None if idx==maxSect else lsLnIdx[idx+1][0]
+			title_ln = lines[lnFileIdxSctHd+1]
+			headlines = lines[lnFileIdxSctHd:lnFileIdxSctBd]
+			bodylines = lines[lnFileIdxSctBd:lnFileIdxSctBdEnd]
+			if reHead.match(title_ln):
+				it.Head.load(headlines, bodylines, lnFileIdxSctHd)
+			elif reTOC.match(title_ln):
+				it.ToC.load(headlines, bodylines, lnFileIdxSctHd)
 			else:
-				if reHead.match(lines[lnFileIdxSctHd+1]):
-					lnFileIdxSctBd = -1
-				newSect.load(lines[lnFileIdxSctHd:lnFileIdxSctBd], lines[lnFileIdxSctBd:], lnFileIdxSctHd)
-			it.append(newSect)
-		_d( (f"Sections total: {len(it)}\n",) )
+				newSect = Section()
+				newSect.load(headlines, bodylines, lnFileIdxSctHd)
+				it.append(newSect)
+		_d( (f"Sections total: {len(it)} (+ Head + ToC)\n",) )
 		Data_pass = "File Loaded"
+
+	def _st(it):
+		it.ToC.clear()
+		for sect in it:
+			sect.regen_headlines(it.ToC)
+		txt_st  = it.Head._st()
+		txt_st += it.ToC._st()
+		for child in it:
+			txt_st += child._st()
+		return txt_st
 
 	def store(it, fnStore):
 		_l( (("Writing a file:", 'phr'), "'", (fnStore, 'fnm'), "'\n") )
 		hFile = open(fnStore, 'w')
 		#repay debit
-		storage = it._st()[:-it.STD_Debit-1] # Cut '\n's of debit with credit ;)
+		storage = it._st()[:-it.STD_Debit] # Cut '\n's of debit with credit ;)
 		hFile.write(storage)
 		hFile.close()
 		it.fnStore = fnStore
-		print(f"Saved as:„{fnStore}”")
 
 	def getSectionByName(it, name):
 		for sect in it:
